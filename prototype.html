@@ -1,0 +1,4531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Barcode Scanner — Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ================ Tokens — locked per ui-kit-spec.md v0.1 ================ */
+  :root {
+    /* Surface & text — spec §1.1 */
+    --canvas:        #FAFAF7;
+    --raised:        #FFFFFF;
+    --sunken:        #F4F4F0;
+    --inverse:       #0A0A0A;
+    --inverse-2:     #262626;
+    --t-primary:     #0A0A0A;
+    --t-secondary:   #525252;
+    --t-tertiary:    #A3A3A3;
+    --t-inverse:     #FFFFFF;
+    --b-hairline:    #EAEAEA;
+    --b-strong:      #0A0A0A;
+    --b-subtle:      #F0F0EC;
+    --b-rule:        #F0F0EC;  /* alias of --b-subtle, kept for back-compat */
+
+    /* Nutri-Score (official) — spec §1.2, do not adjust */
+    --ns-a: #038141;
+    --ns-b: #85BB2F;
+    --ns-c: #FECB02;
+    --ns-d: #EE8100;
+    --ns-e: #E63E11;
+
+    /* Nutri-Score text variants — AA-safe for use as text on light backgrounds */
+    --ns-a-text: #03683A;
+    --ns-b-text: #4F7E1F;
+    --ns-c-text: #7A5A00;
+    --ns-d-text: #B35900;
+    --ns-e-text: #C13208;
+
+    /* Alert severities — spec §1.3 (badge bg) */
+    --alert-critical: #E63E11;
+    --alert-warning:  #EE8100;
+    --alert-info:     #1F6FEB;
+    --alert-success:  #038141;
+    /* Alert text variants — AA-safe on white */
+    --alert-critical-text: #C13208;
+    --alert-warning-text:  #B35900;
+    --alert-info-text:     #1F6FEB;
+    --alert-success-text:  #03683A;
+
+    /* Personal-alert ingredient row warmed white — spec §5.9 */
+    --warm-tint: #FFF8F4;
+
+    /* AI-moment surface — greyscale per .impeccable.md principle 3.
+       No chromatic brand accent: saturation is reserved for verdict + severity. */
+    --ai-ink:     #0A0A0A;       /* AI text / icons / send button */
+    --ai-ink-2:   #262626;       /* hover/pressed */
+    --ai-surface: #E8E7DF;       /* AI section background — distinguishable from canvas */
+
+    /* Radii — spec §3.2 */
+    --r-sm: 8px;
+    --r-md: 16px;
+    --r-lg: 20px;
+    --r-xl: 28px;
+
+    /* Sheet shadow — spec §1.4 */
+    --shadow-sheet: 0 -8px 32px rgba(0,0,0,.08);
+    --shadow-card:  0 1px 0 rgba(10,10,10,.02);
+    --shadow-device: 0 28px 80px rgba(10,10,10,.18), 0 0 0 1px rgba(10,10,10,.06);
+
+    --device-w: 393px;
+    --device-h: 852px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    background: var(--canvas);
+    color: var(--t-primary);
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: start;
+    justify-items: center;
+    padding: 32px 16px 48px;
+    -webkit-font-smoothing: antialiased;
+    font-weight: 500;
+  }
+  .mono { font-family: 'Geist Mono', ui-monospace, monospace; font-feature-settings: 'tnum'; }
+
+  /* ================ Layout shell ================ */
+  .stage {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 32px;
+    width: 100%;
+    max-width: 1280px;
+    grid-template-areas:
+      "title"
+      "device"
+      "panel";
+  }
+  @media (min-width: 980px) {
+    .stage {
+      grid-template-columns: 1fr var(--device-w) 1fr;
+      grid-template-areas:
+        "title  title  title"
+        "panelL device panelR";
+      align-items: start;
+      gap: 24px;
+    }
+  }
+  .stage-title { grid-area: title; text-align: center; padding-top: 8px; }
+  .stage-title h1 {
+    font-size: clamp(32px, 4vw, 44px); margin: 0 0 8px;
+    letter-spacing: -0.035em; font-weight: 700;
+    line-height: 1;
+  }
+  .stage-title p {
+    margin: 0; color: var(--t-secondary); font-size: 13px;
+    font-family: 'Geist Mono', monospace;
+    letter-spacing: -.005em;
+  }
+
+  .device-wrap {
+    grid-area: device;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  .proto-control {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 8px 8px 16px;
+    background: var(--raised);
+    border: 1px dashed color-mix(in oklch, var(--t-tertiary) 50%, transparent);
+    border-radius: 999px;
+  }
+  body[data-screen="chat"] .proto-control { display: inline-flex; }
+  .proto-control .label {
+    font-size: 10px;
+    color: var(--t-tertiary);
+    font-family: 'Geist Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+  }
+  .panel-l { grid-area: panelL; }
+  .panel-r { grid-area: panelR; }
+  .panel {
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: var(--r-lg);
+    padding: 18px;
+    max-width: 320px;
+    margin: 0 auto;
+    font-size: 13px;
+  }
+  .panel + .panel { margin-top: 16px; }
+  .panel h3 {
+    margin: 0 0 14px; font-size: 11px;
+    letter-spacing: .12em; text-transform: uppercase;
+    color: var(--t-tertiary); font-weight: 600;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--b-hairline);
+  }
+  .panel ul { margin: 0; padding-left: 16px; color: var(--t-secondary); line-height: 1.55; }
+  .panel ul li { margin-bottom: 6px; }
+  .panel .nav-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .panel .pill {
+    border: 1px solid var(--b-hairline);
+    background: var(--raised);
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--t-primary);
+    font-family: inherit;
+    transition: background-color 120ms cubic-bezier(0.2,0,0,1);
+  }
+  .panel .pill:hover { background: var(--sunken); }
+  .panel .pill.active { background: var(--inverse); color: var(--t-inverse); border-color: var(--inverse); }
+
+  /* Screen tree (V2 panel-l) */
+  .screen-tree { display: flex; flex-direction: column; gap: 14px; }
+  .st-group { display: flex; flex-direction: column; gap: 8px; }
+  .st-screen {
+    align-self: flex-start;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em;
+  }
+  .st-states {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-left: 14px;
+    margin-left: 6px;
+    border-left: 1px solid var(--b-hairline);
+  }
+  .st-state {
+    font-size: 11.5px !important;
+    padding: 5px 10px !important;
+    color: var(--t-secondary) !important;
+  }
+  .st-state.active {
+    background: var(--inverse) !important;
+    color: var(--t-inverse) !important;
+    border-color: var(--inverse) !important;
+  }
+  .st-state:hover { color: var(--t-primary) !important; }
+  .st-state.active:hover { color: var(--t-inverse) !important; }
+
+  /* ================ Device ================ */
+  .device {
+    width: var(--device-w);
+    height: var(--device-h);
+    background: #1a1a1a;
+    border-radius: 56px;
+    padding: 12px;
+    box-shadow: var(--shadow-device);
+    position: relative;
+    overflow: hidden;
+  }
+  .device::before {
+    content: "";
+    position: absolute;
+    top: 22px; left: 50%;
+    transform: translateX(-50%);
+    width: 122px; height: 36px;
+    background: #000;
+    border-radius: 24px;
+    z-index: 100;
+    pointer-events: none;
+  }
+  .device-screen {
+    width: 100%; height: 100%;
+    border-radius: 44px;
+    background: var(--canvas);
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* status bar */
+  .status-bar {
+    position: absolute; top: 0; left: 0; right: 0; height: 54px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 32px 8px; z-index: 30;
+    font-size: 15px; font-weight: 600;
+    pointer-events: none;
+    font-family: 'Geist Mono', monospace;
+    font-feature-settings: 'tnum';
+  }
+  .status-bar .icons { display: flex; gap: 6px; align-items: center; }
+  .status-bar .icons svg { width: 16px; height: 11px; }
+  .status-bar.dark { color: white; }
+  .status-bar.dark svg { fill: white; }
+  .status-bar.light { color: var(--t-primary); }
+  .status-bar.light svg { fill: var(--t-primary); }
+
+  /* Screens base */
+  .screen {
+    position: absolute; inset: 0;
+    overflow: hidden;
+    transition: opacity .35s ease;
+    opacity: 0; pointer-events: none;
+    background: var(--canvas);
+    border-radius: 44px;
+  }
+  .screen.active { opacity: 1; pointer-events: auto; }
+
+  .screen-inner {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ================ Tab bar ================ */
+  .tab-bar {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 84px;
+    background: rgba(255,255,255,.96);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-top: 1px solid var(--b-hairline);
+    display: flex; align-items: center; justify-content: space-around;
+    padding: 0 24px 24px;
+    z-index: 20;
+    /* Match the device-screen radius on the bottom corners.
+       backdrop-filter creates its own compositing layer that webkit
+       doesn't always clip to the parent's border-radius, so we round here. */
+    border-bottom-left-radius: 44px;
+    border-bottom-right-radius: 44px;
+  }
+  .tab-bar.dark {
+    background: rgba(20,20,22,.78);
+    border-top-color: rgba(255,255,255,.10);
+  }
+  .tab {
+    width: 64px; height: 44px;
+    border-radius: 999px;
+    display: grid; place-items: center;
+    cursor: pointer; padding: 0;
+    background: transparent; border: 0;
+    color: var(--t-secondary);
+    transition: background-color 120ms, color 120ms;
+  }
+  .tab.dark { color: rgba(255,255,255,.6); }
+  .tab.active { background: var(--inverse); color: var(--t-inverse); }
+  .tab.active.dark { background: rgba(255,255,255,.95); color: var(--inverse); }
+  .tab.center { transform: translateY(-2px); }
+  .tab svg { width: 22px; height: 22px; }
+
+  /* ============================================
+     SCREEN 1 — CAMERA
+  ============================================ */
+  #screen-camera { background: #0B0B0F; }
+
+  .camera-view {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 30%, #2a2a32 0%, #0c0c10 70%, #000 100%);
+    overflow: hidden;
+  }
+  .camera-view::before {
+    content: "";
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(180deg, transparent 0%, transparent 60%, rgba(0,0,0,.5) 100%),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 60px, rgba(255,255,255,.015) 60px 120px);
+    opacity: .6;
+  }
+  .camera-mask {
+    position: absolute;
+    top: 140px; left: 50%; transform: translateX(-50%);
+    width: 280px; height: 200px;
+    border-radius: 20px;
+    box-shadow: 0 0 0 2000px rgba(0,0,0,.55);
+    transition: box-shadow .25s ease;
+  }
+  .camera-mask.scanned {
+    box-shadow: 0 0 0 2000px rgba(0,0,0,.55), 0 0 32px rgba(3,129,65,.45);
+  }
+  .camera-mask::before, .camera-mask::after,
+  .camera-corners > span {
+    content: ""; position: absolute;
+    width: 32px; height: 32px;
+    border: 3px solid #fff;
+    transition: border-color .25s ease;
+  }
+  .camera-mask::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; border-top-left-radius: 14px; }
+  .camera-mask::after  { top: -1px; right: -1px; border-left: 0; border-bottom: 0; border-top-right-radius: 14px; }
+  .camera-corners span:first-child { bottom: -1px; left: -1px; border-right: 0; border-top: 0; border-bottom-left-radius: 14px; }
+  .camera-corners span:last-child  { bottom: -1px; right: -1px; border-left: 0; border-top: 0; border-bottom-right-radius: 14px; }
+  .camera-mask.scanned::before, .camera-mask.scanned::after,
+  .camera-mask.scanned .camera-corners span { border-color: var(--ns-a); }
+
+  .scan-line {
+    position: absolute; left: 12px; right: 12px; top: 12px;
+    height: 1.5px; border-radius: 2px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent);
+    box-shadow: 0 0 12px rgba(255,255,255,.3);
+    animation: scan 2s ease-in-out infinite;
+  }
+  @keyframes scan {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(170px); }
+  }
+  .camera-mask.scanned .scan-line { display: none; }
+
+  .barcode {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 200px; height: 70px;
+    display: flex; align-items: center; justify-content: center;
+    opacity: .85;
+  }
+  .barcode svg { width: 100%; height: 100%; }
+
+  .camera-hint {
+    position: absolute; left: 0; right: 0; top: 360px;
+    text-align: center; color: rgba(255,255,255,.95);
+    font-size: 18px; font-weight: 500;
+    letter-spacing: -.02em;
+  }
+  .camera-hint .sub {
+    color: rgba(255,255,255,.5); font-size: 12px; margin-top: 8px;
+    font-family: 'Geist Mono', monospace;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .camera-top {
+    position: absolute; top: 60px; left: 16px; right: 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    z-index: 5;
+  }
+  .icon-btn {
+    width: 40px; height: 40px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.12);
+    border: 0; cursor: pointer;
+    color: white; display: grid; place-items: center;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .icon-btn svg { width: 20px; height: 20px; }
+  .logo {
+    display: flex; align-items: center; gap: 8px;
+    color: white;
+    background: rgba(255,255,255,.12);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 999px;
+    padding: 8px 14px 8px 12px;
+    font-size: 14px; font-weight: 700;
+    letter-spacing: -.02em;
+  }
+  .logo svg { width: 18px; height: 18px; }
+
+  /* Empty state for Scanner tab */
+  .empty-state {
+    position: absolute; left: 12px; right: 12px; bottom: 100px;
+    background: var(--raised);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow-sheet);
+    padding: 12px 22px 22px;
+    z-index: 9;
+    transition: opacity .3s ease, transform .3s ease;
+  }
+  .empty-state.hidden { opacity: 0; transform: translateY(20px); pointer-events: none; }
+  .es-grip { width: 36px; height: 4px; background: var(--b-hairline); border-radius: 999px; margin: 0 auto 18px; }
+  .es-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--b-rule);
+  }
+  .es-title {
+    font-size: 11px; font-weight: 600;
+    letter-spacing: .12em; text-transform: uppercase;
+  }
+  .es-link {
+    background: transparent; border: 0;
+    color: var(--t-secondary);
+    font-size: 12px; font-weight: 500; cursor: pointer; padding: 0;
+    font-family: 'Geist Mono', monospace;
+  }
+  .es-link:hover { color: var(--t-primary); }
+  .es-history { display: flex; flex-direction: column; gap: 6px; }
+  .es-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: var(--r-md);
+    padding: 8px 10px 8px 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: background .15s ease;
+    font-family: inherit;
+  }
+  .es-item:hover { background: var(--sunken); }
+  .es-photo {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    color: #fff;
+    font-weight: 700; font-size: 18px;
+    letter-spacing: -0.04em;
+  }
+  .es-meta { flex: 1; min-width: 0; }
+  .es-name { font-size: 14px; font-weight: 600; line-height: 1.2; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+  .es-sub { font-size: 11px; color: var(--t-tertiary); margin-top: 2px; font-family: 'Geist Mono', monospace; }
+  .es-tip {
+    margin-top: 16px;
+    padding: 14px 14px;
+    background: var(--sunken);
+    border-radius: var(--r-md);
+    display: flex; gap: 10px; align-items: flex-start;
+    font-size: 12.5px; line-height: 1.5;
+    color: var(--t-secondary);
+  }
+  .es-tip-ico {
+    flex-shrink: 0; color: var(--t-secondary);
+    width: 16px; height: 16px;
+  }
+  .es-tip a { color: var(--t-primary); font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--t-primary); }
+  .es-tip b { color: var(--t-primary); font-weight: 600; }
+
+  /* Empty state — clean (no history) */
+  .empty-state-clean { padding: 16px 24px 24px; text-align: center; }
+  .esc-illustration {
+    width: 80px; height: 80px;
+    border-radius: 22px;
+    background: var(--sunken);
+    color: var(--t-primary);
+    display: grid; place-items: center;
+    margin: 6px auto 18px;
+  }
+  .esc-illustration svg { width: 40px; height: 40px; }
+  .esc-title {
+    font-size: 26px; font-weight: 700;
+    letter-spacing: -.03em;
+    line-height: 1.05;
+    margin-bottom: 8px;
+  }
+  .esc-sub {
+    font-size: 14px; line-height: 1.45;
+    color: var(--t-secondary);
+    max-width: 260px; margin: 0 auto;
+  }
+
+  /* Mini cards carousel */
+  .mini-carousel {
+    position: absolute; left: 0; right: 0; bottom: 100px;
+    z-index: 10;
+  }
+  .mini-dots {
+    display: flex; justify-content: center; gap: 6px;
+    margin-bottom: 12px;
+    min-height: 6px;
+  }
+  .mini-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(255,255,255,.4);
+    transition: all .25s ease;
+  }
+  .mini-dot.active { background: white; transform: scale(1.35); }
+  .mini-track {
+    display: flex; gap: 12px;
+    padding: 6px 24px 8px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 24px;
+    scroll-padding-right: 24px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  .mini-track::-webkit-scrollbar { display: none; }
+  .mini-card {
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+    background: var(--raised);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow-sheet);
+    padding: 18px 22px 22px;
+    opacity: 0;
+    transform: translateY(40px) scale(.96);
+    transition: opacity .35s ease, transform .4s cubic-bezier(.2,.85,.2,1.05);
+  }
+  .mini-card.visible { opacity: 1; transform: translateY(0) scale(1); }
+
+  .mc-header { display: flex; align-items: center; gap: 12px; }
+  .mc-photo {
+    width: 56px; height: 56px; border-radius: var(--r-md);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    color: #fff;
+    font-weight: 700; font-size: 24px;
+    letter-spacing: -0.04em;
+    border: 1px solid var(--b-hairline);
+    overflow: hidden;
+  }
+  .mc-photo[data-tone="amber"]  { background: linear-gradient(135deg, #3A1F0A, #6B3211); color: #FFE0B0; border-color: transparent; }
+  .mc-photo[data-tone="green"]  { background: linear-gradient(135deg, #1A4A2A, #2E7B47); color: #C6F0D5; border-color: transparent; }
+  .mc-photo[data-tone="cream"]  { background: linear-gradient(135deg, #4A3A1A, #8B6B2D); color: #F0E2A8; border-color: transparent; }
+  .mc-photo[data-tone="muted"]  { background: var(--sunken); color: var(--t-tertiary); }
+
+  .mc-meta { flex: 1; min-width: 0; }
+  /* title/m per spec §2 */
+  .mc-meta .name {
+    font-weight: 600; font-size: 18px;
+    letter-spacing: -.005em; line-height: 1.3;
+    white-space: nowrap; text-overflow: ellipsis; overflow: hidden;
+  }
+  /* caption per spec §2 */
+  .mc-meta .brand {
+    color: var(--t-secondary);
+    font-size: 12px; margin-top: 4px;
+    letter-spacing: .01em;
+  }
+
+  /* Score badge — used by full report hero (.lg). */
+  .ns-badge {
+    width: 80px; height: 80px; border-radius: var(--r-md);
+    color: white; font-weight: 700;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    line-height: 1;
+    letter-spacing: -.05em;
+    font-feature-settings: 'tnum';
+    font-size: 64px;
+  }
+  .ns-a { background: var(--ns-a); }
+  .ns-b { background: var(--ns-b); }
+  .ns-c { background: var(--ns-c); color: #1A1500; }
+  .ns-d { background: var(--ns-d); }
+  .ns-e { background: var(--ns-e); }
+  .ns-na {
+    background: var(--sunken); color: var(--t-tertiary);
+    font-style: normal;
+  }
+  /* Em-dash placeholder sizing per context */
+  .ns-badge.lg.ns-na   { font-size: 80px; line-height: 1; padding: 0; }
+  .ns-mini.ns-na       { font-size: 16px; line-height: 1; }
+
+  /* Mini-card score chip — visible at a glance, but smaller than the alert hero */
+  .mc-score-chip {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: grid; place-items: center;
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -.04em;
+    line-height: 1;
+    flex-shrink: 0;
+    color: #FFFFFF;
+    font-feature-settings: 'tnum';
+  }
+  .mc-score-chip.ns-c { color: #1A1500; }
+  .mc-score-chip.ns-na {
+    font-size: 22px;
+    color: var(--t-tertiary);
+    background: var(--sunken);
+  }
+
+  /* Mini-card alert — HERO. Per .impeccable.md principle 5: alerts outrank score, always. */
+  .mc-alert-hero {
+    margin-top: 22px;
+    display: flex; gap: 14px;
+    align-items: flex-start;
+  }
+  .mc-alert-hero .mc-alert-badge {
+    width: 40px; height: 40px;
+    border-radius: 999px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+    transition: box-shadow 320ms cubic-bezier(.2,0,0,1);
+  }
+  .mc-alert-hero .mc-alert-badge svg { width: 20px; height: 20px; }
+  .mc-alert-hero.danger  .mc-alert-badge { background: var(--alert-critical); box-shadow: 0 0 0 6px color-mix(in oklab, var(--alert-critical) 14%, transparent); }
+  .mc-alert-hero.warn    .mc-alert-badge { background: var(--alert-warning);  box-shadow: 0 0 0 6px color-mix(in oklab, var(--alert-warning) 14%, transparent); }
+  .mc-alert-hero.info    .mc-alert-badge { background: var(--alert-info);     box-shadow: 0 0 0 6px color-mix(in oklab, var(--alert-info) 14%, transparent); }
+  .mc-alert-hero.success .mc-alert-badge { background: var(--alert-success);  box-shadow: 0 0 0 6px color-mix(in oklab, var(--alert-success) 14%, transparent); }
+
+  .mc-alert-hero .mc-alert-body { flex: 1; min-width: 0; }
+  .mc-alert-hero .mc-alert-eyebrow {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    line-height: 1;
+  }
+  .mc-alert-hero .mc-alert-eyebrow .verdict-word { color: var(--t-primary); }
+  .mc-alert-hero.danger  .mc-alert-eyebrow .verdict-word { color: var(--alert-critical-text); }
+  .mc-alert-hero.warn    .mc-alert-eyebrow .verdict-word { color: var(--alert-warning-text); }
+  .mc-alert-hero.info    .mc-alert-eyebrow .verdict-word { color: var(--alert-info-text); }
+  .mc-alert-hero.success .mc-alert-eyebrow .verdict-word { color: var(--alert-success-text); }
+  .mc-alert-hero .mc-alert-eyebrow .verdict-sep { color: var(--t-tertiary); margin: 0 6px; }
+  .mc-alert-hero .mc-alert-eyebrow .verdict-meta { color: var(--t-tertiary); }
+
+  .mc-alert-hero .mc-alert-title {
+    font-size: 22px; font-weight: 700;
+    letter-spacing: -.022em;
+    line-height: 1.2;
+    color: var(--t-primary);
+  }
+  .mc-alert-hero.danger  .mc-alert-title { color: var(--alert-critical-text); }
+  .mc-alert-hero.warn    .mc-alert-title { color: var(--alert-warning-text); }
+  .mc-alert-hero.info    .mc-alert-title { color: var(--alert-info-text); }
+  .mc-alert-hero.success .mc-alert-title { color: var(--alert-success-text); }
+  .mc-alert-hero .mc-alert-desc {
+    font-size: 14px; color: var(--t-secondary);
+    line-height: 1.45; margin-top: 6px;
+  }
+
+  .mc-cta {
+    margin-top: 14px;
+    width: 100%;
+    background: var(--inverse);
+    color: var(--t-inverse);
+    border: 0; border-radius: var(--r-md);
+    padding: 16px;
+    font-size: 16px; font-weight: 600;
+    letter-spacing: -.01em;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: background-color 120ms;
+    font-family: inherit;
+  }
+  .mc-cta:hover { background: var(--inverse-2); }
+  .mc-cta:active { transform: scale(.99); }
+
+  /* ============================================
+     SCREEN 2 — FULL REPORT (sheet)
+  ============================================ */
+  #screen-report {
+    background: rgba(0,0,0,.5);
+  }
+  #screen-report::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,.45);
+    backdrop-filter: blur(2px);
+  }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 92%;
+    background: var(--canvas);
+    border-top-left-radius: var(--r-xl);
+    border-top-right-radius: var(--r-xl);
+    box-shadow: var(--shadow-sheet);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    transform: translateY(100%);
+    transition: transform .4s cubic-bezier(.2,.8,.2,1);
+  }
+  .screen.active .sheet { transform: translateY(0); }
+
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: var(--b-hairline);
+    border-radius: 999px;
+    margin: 8px auto 0;
+    flex-shrink: 0;
+  }
+  .sheet-header {
+    padding: 10px 20px 12px;
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .sheet-title {
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    font-family: 'Geist Mono', monospace;
+    color: var(--t-tertiary);
+  }
+  .sheet-close {
+    width: 32px; height: 32px; border-radius: 999px;
+    background: var(--sunken); color: var(--t-primary);
+    border: 0; cursor: pointer; display: grid; place-items: center;
+    transition: background-color 120ms;
+  }
+  .sheet-close:hover { background: var(--b-hairline); }
+  .sheet-close svg { width: 14px; height: 14px; }
+
+  .sheet-body { flex: 1; overflow: auto; padding: 0 20px 32px; }
+  .sheet-body::-webkit-scrollbar { width: 0; }
+
+  .card {
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: var(--r-lg);
+    padding: 20px;
+    margin-bottom: 12px;
+  }
+  .card.flat { border: 0; padding: 0; background: transparent; }
+
+  /* Product hero — masthead. Spec §7.2: 80×80 photo, title/m name, body/m brand.
+     Photo + verdict-pill stacked in the left column; brand-eyebrow + title on the right. */
+  .product-hero {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 14px;
+    align-items: start;
+    margin: 4px 0 14px;
+  }
+  .product-hero .photo-col {
+    display: flex; flex-direction: column;
+    gap: 10px;
+    width: 80px;
+  }
+  .product-hero .photo {
+    position: relative; overflow: hidden;
+    width: 80px; height: 80px;
+    border-radius: var(--r-md);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    color: #fff;
+    font-weight: 700; font-size: 40px;
+    letter-spacing: -.04em;
+    border: 1px solid var(--b-hairline);
+  }
+  .product-hero .photo[data-tone="amber"] { background: linear-gradient(135deg, #3A1F0A, #6B3211); color: #FFE0B0; border-color: transparent; }
+  .product-hero .photo[data-tone="green"] { background: linear-gradient(135deg, #1A4A2A, #2E7B47); color: #C6F0D5; border-color: transparent; }
+  .product-hero .photo[data-tone="cream"] { background: linear-gradient(135deg, #4A3A1A, #8B6B2D); color: #F0E2A8; border-color: transparent; }
+  /* Real product image overlays the gradient + monogram; on error the img is removed and the fallback shows */
+  .product-hero .photo > img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: contain;
+    background: var(--raised);
+    padding: 4px;
+    z-index: 1;
+  }
+  /* When a real image is present, neutralize the tone gradient so it doesn't leak around the contained image */
+  .product-hero .photo[data-tone]:has(> img) { background: var(--raised); }
+  .product-hero .col {
+    display: flex; flex-direction: column;
+    min-width: 0;
+    padding: 4px 0;
+    gap: 8px;
+  }
+  /* Title — spec title/m: 18 / 1.3 / 600 / -0.5% */
+  .product-hero .name {
+    font-weight: 600; font-size: 18px;
+    letter-spacing: -.005em; line-height: 1.3;
+    margin: 0;
+    display: -webkit-box; -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical; overflow: hidden;
+    color: var(--t-primary);
+    word-break: break-word; overflow-wrap: anywhere;
+  }
+  /* Brand eyebrow — mono manufacturer name + size on one baseline */
+  .product-hero .brand-eyebrow {
+    display: flex; align-items: baseline; gap: 8px;
+    flex-wrap: wrap;
+  }
+  .product-hero .brand-eyebrow .brand-name {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: .16em; text-transform: uppercase;
+    color: var(--t-tertiary);
+  }
+  .product-hero .brand-eyebrow .brand-size {
+    font-size: 12.5px; font-weight: 500;
+    color: var(--t-secondary);
+  }
+  /* Legacy details span hidden if any old markup leaks through */
+  .product-hero .details { display: none; }
+  /* Verdict pill — sits under the title, hugs its content */
+  .product-hero .verdict-mini {
+    align-self: flex-start;
+    display: inline-flex; align-items: center;
+    gap: 7px;
+    padding: 0;
+    font-family: 'Geist Mono', monospace;
+    font-size: 12.5px; letter-spacing: .14em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--t-secondary);
+    white-space: nowrap;
+  }
+  .product-hero.score-a .verdict-mini { color: var(--ns-a-text); }
+  .product-hero.score-b .verdict-mini { color: var(--ns-b-text); }
+  .product-hero.score-c .verdict-mini { color: var(--ns-c-text); }
+  .product-hero.score-d .verdict-mini { color: var(--ns-d-text); }
+  .product-hero.score-e .verdict-mini { color: var(--ns-e-text); }
+  .product-hero.score-na .verdict-mini { color: var(--t-secondary); }
+  .product-hero .verdict-mini .ns {
+    width: 21px; height: 21px;
+    border-radius: 6px;
+    color: #fff;
+    font-family: 'Geist', sans-serif;
+    font-weight: 800; font-size: 13px;
+    letter-spacing: -.04em;
+    display: grid; place-items: center;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .product-hero.score-a .verdict-mini .ns { background: var(--ns-a); }
+  .product-hero.score-b .verdict-mini .ns { background: var(--ns-b); }
+  .product-hero.score-c .verdict-mini .ns { background: var(--ns-c); color: #1A1500; }
+  .product-hero.score-d .verdict-mini .ns { background: var(--ns-d); }
+  .product-hero.score-e .verdict-mini .ns { background: var(--ns-e); }
+  .product-hero.score-na .verdict-mini .ns { background: var(--t-tertiary); }
+
+  /* Verdict — hero (chromatic per score) */
+  .verdict-card {
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: var(--r-lg);
+    padding: 36px 24px 32px;
+    margin-bottom: 12px;
+    text-align: center;
+    transition: background-color 280ms cubic-bezier(.2,0,0,1), border-color 280ms cubic-bezier(.2,0,0,1);
+  }
+  /* Score-tinted verdict atmospherics — color-mix gives a subtle wash, not a flourish */
+  .verdict-card.score-a { background: color-mix(in oklab, var(--ns-a) 7%, var(--raised)); border-color: color-mix(in oklab, var(--ns-a) 22%, var(--b-hairline)); }
+  .verdict-card.score-b { background: color-mix(in oklab, var(--ns-b) 8%, var(--raised)); border-color: color-mix(in oklab, var(--ns-b) 24%, var(--b-hairline)); }
+  .verdict-card.score-c { background: color-mix(in oklab, var(--ns-c) 12%, var(--raised)); border-color: color-mix(in oklab, var(--ns-c) 30%, var(--b-hairline)); }
+  .verdict-card.score-d { background: color-mix(in oklab, var(--ns-d) 9%, var(--raised)); border-color: color-mix(in oklab, var(--ns-d) 26%, var(--b-hairline)); }
+  .verdict-card.score-e { background: color-mix(in oklab, var(--ns-e) 8%, var(--raised)); border-color: color-mix(in oklab, var(--ns-e) 26%, var(--b-hairline)); }
+  .verdict-card.score-na { background: var(--raised); border-color: var(--b-hairline); }
+
+  .verdict-card .verdict-label {
+    font-size: 10px; font-weight: 600;
+    color: var(--t-tertiary);
+    text-transform: uppercase; letter-spacing: .18em;
+    font-family: 'Geist Mono', monospace;
+    margin-bottom: 20px;
+  }
+  .verdict-card.score-a .verdict-label { color: var(--ns-a-text); }
+  .verdict-card.score-b .verdict-label { color: var(--ns-b-text); }
+  .verdict-card.score-c .verdict-label { color: var(--ns-c-text); }
+  .verdict-card.score-d .verdict-label { color: var(--ns-d-text); }
+  .verdict-card.score-e .verdict-label { color: var(--ns-e-text); }
+
+  .verdict-card .verdict-row {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+  }
+  /* Hero score badge — spec §5.5, 120×120 / display/score 128 */
+  .ns-badge.lg {
+    width: 120px; height: 120px; border-radius: var(--r-lg);
+    font-size: 128px;
+    letter-spacing: -.03em;
+    line-height: 1;
+  }
+  .verdict-card .text {
+    font-size: 56px; font-weight: 700;
+    letter-spacing: -.045em;
+    line-height: 1;
+    margin-top: 8px;
+    color: var(--t-primary);
+    transition: color 280ms cubic-bezier(.2,0,0,1);
+  }
+  /* Verdict word inherits the score colour — the moment of truth */
+  .verdict-card.score-a .text { color: var(--ns-a-text); }
+  .verdict-card.score-b .text { color: var(--ns-b-text); }
+  .verdict-card.score-c .text { color: var(--ns-c-text); }
+  .verdict-card.score-d .text { color: var(--ns-d-text); }
+  .verdict-card.score-e .text { color: var(--ns-e-text); }
+  .verdict-card .sub {
+    color: var(--t-secondary); font-size: 14px;
+    margin-top: 8px; max-width: 280px;
+    line-height: 1.45;
+  }
+
+  /* Compact verdict — horizontal strip after alerts; score is supporting info */
+  .verdict-card.compact {
+    padding: 14px 16px;
+    text-align: left;
+  }
+  .verdict-card.compact .verdict-label {
+    margin-bottom: 10px;
+    font-size: 9.5px; letter-spacing: .16em;
+  }
+  .verdict-card.compact .verdict-row {
+    flex-direction: row; align-items: center; gap: 14px;
+  }
+  .verdict-card.compact .ns-badge.lg {
+    width: 44px; height: 44px; border-radius: 10px;
+    font-size: 22px; flex-shrink: 0;
+  }
+  .verdict-card.compact .text {
+    font-size: 18px; margin-top: 0;
+    letter-spacing: -.02em;
+  }
+  .verdict-card.compact .sub {
+    font-size: 13px; margin-top: 2px;
+    max-width: none; line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+
+  /* Section title — title/l per spec §2. Whitespace separates, no rule line.
+     Optional .lead clarifies the section in 5–8 words. */
+  .section-title {
+    margin: 32px 4px 14px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .section-title .name {
+    font-size: 24px; font-weight: 600;
+    letter-spacing: -.01em; line-height: 1.2;
+    color: var(--t-primary);
+  }
+  .section-title .lead {
+    font-size: 14px; line-height: 1.4;
+    color: var(--t-secondary);
+    letter-spacing: -.005em;
+  }
+
+  /* Alerts */
+  .alert-item {
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: var(--r-lg);
+    padding: 18px 20px;
+    margin-bottom: 8px;
+    display: flex; gap: 14px; align-items: flex-start;
+  }
+  .alert-item .ico {
+    width: 36px; height: 36px;
+    border-radius: 999px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .alert-item .ico svg { width: 18px; height: 18px; }
+  .alert-item.danger  .ico { background: var(--alert-critical); }
+  .alert-item.warn    .ico { background: var(--alert-warning); }
+  .alert-item.info    .ico { background: var(--alert-info); }
+  .alert-item.success .ico { background: var(--alert-success); }
+  .alert-item .body { flex: 1; min-width: 0; }
+  .alert-item .body .title {
+    font-weight: 700; font-size: 17px;
+    line-height: 1.25; margin-top: 2px;
+    letter-spacing: -.01em;
+    color: var(--t-primary);
+  }
+  .alert-item.danger  .body .title { color: var(--alert-critical-text); }
+  .alert-item.warn    .body .title { color: var(--alert-warning-text); }
+  .alert-item.info    .body .title { color: var(--alert-info-text); }
+  .alert-item.success .body .title { color: var(--alert-success-text); }
+  .alert-item .body .desc {
+    font-size: 14px; color: var(--t-secondary);
+    margin-top: 6px; line-height: 1.45;
+  }
+  /* Per-ingredient match tags — one alert can fail multiple user concerns at once */
+  .alert-item .alert-tags {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-top: 10px;
+  }
+  .alert-item .alert-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: .04em;
+    padding: 4px 8px 4px 7px;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--t-primary) 6%, transparent);
+    color: var(--t-secondary);
+    border: 1px solid var(--b-hairline);
+    white-space: nowrap;
+  }
+  .alert-item .alert-tag::before {
+    content: ''; width: 5px; height: 5px; border-radius: 999px;
+    background: var(--t-tertiary);
+  }
+  .alert-item.danger  .alert-tag { background: color-mix(in oklab, var(--alert-critical) 9%, var(--raised)); border-color: color-mix(in oklab, var(--alert-critical) 22%, var(--b-hairline)); color: var(--alert-critical-text); }
+  .alert-item.warn    .alert-tag { background: color-mix(in oklab, var(--alert-warning) 10%, var(--raised));  border-color: color-mix(in oklab, var(--alert-warning) 24%, var(--b-hairline));  color: var(--alert-warning-text); }
+  .alert-item.info    .alert-tag { background: color-mix(in oklab, var(--alert-info) 9%, var(--raised));     border-color: color-mix(in oklab, var(--alert-info) 22%, var(--b-hairline));     color: var(--alert-info-text); }
+  .alert-item.success .alert-tag { background: color-mix(in oklab, var(--alert-success) 9%, var(--raised));  border-color: color-mix(in oklab, var(--alert-success) 22%, var(--b-hairline));  color: var(--alert-success-text); }
+  .alert-item.danger  .alert-tag::before { background: var(--alert-critical); }
+  .alert-item.warn    .alert-tag::before { background: var(--alert-warning); }
+  .alert-item.info    .alert-tag::before { background: var(--alert-info); }
+  .alert-item.success .alert-tag::before { background: var(--alert-success); }
+
+  /* Breakdown accordion — internal rows hug card padding,
+     first/last collapse their outer padding into the card's padding. */
+  .accordion-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--b-hairline);
+    cursor: pointer;
+    user-select: none;
+  }
+  .accordion-row:first-child { padding-top: 4px; }
+  .accordion-row:last-child { padding-bottom: 4px; border-bottom: 0; }
+  /* When open, the row visually attaches to its detail — no rule between them */
+  .accordion-row.open { border-bottom: 0; }
+  .accordion-row .label {
+    flex: 1; font-size: 17px; font-weight: 500;
+    letter-spacing: -.01em;
+  }
+  .level-pill {
+    font-size: 11px; padding: 0; border-radius: 999px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .08em;
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--t-secondary);
+    font-family: 'Geist Mono', monospace;
+  }
+  .level-pill::before {
+    content: ''; width: 8px; height: 8px; border-radius: 999px;
+  }
+  .level-pill.low::before { background: var(--alert-success); }
+  .level-pill.med::before { background: var(--alert-warning); }
+  .level-pill.high::before { background: var(--alert-critical); }
+  .level-pill.na::before { background: transparent; border: 1.5px dashed var(--t-tertiary); }
+  .level-pill.na { color: var(--t-tertiary); }
+  .accordion-row.no-data { cursor: default; pointer-events: none; }
+  .accordion-row.no-data .label { color: var(--t-tertiary); }
+  .accordion-row .chev {
+    color: var(--t-tertiary);
+    transition: transform .2s cubic-bezier(.2,0,0,1);
+  }
+  .accordion-row .chev svg { width: 18px; height: 18px; }
+  .accordion-row.open .chev { transform: rotate(180deg); }
+  .accordion-detail {
+    max-height: 0; overflow: hidden;
+    transition: max-height .3s cubic-bezier(.2,0,0,1);
+    color: var(--t-secondary); font-size: 14px; line-height: 1.5;
+    border-bottom: 1px solid transparent;
+    padding-right: 32px;  /* leave space so text doesn't run under chevron */
+  }
+  .accordion-row.open + .accordion-detail {
+    max-height: 200px;
+    padding: 0 32px 16px 0;
+    border-bottom-color: var(--b-hairline);
+  }
+  /* Last detail in the card: no bottom rule */
+  .accordion-row:nth-last-child(2).open + .accordion-detail:last-child {
+    border-bottom-color: transparent;
+    padding-bottom: 4px;
+  }
+
+  /* Ingredients — risk encoded in chip surface.
+     Hierarchy: solid red (stop) → soft amber (caution) → cool grey (fine). */
+  .ing-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ing {
+    border-radius: var(--r-sm); padding: 8px 12px;
+    font-size: 13px; line-height: 1; font-weight: 500;
+    background: var(--sunken); color: var(--t-secondary);
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: inline-flex; align-items: center;
+    letter-spacing: -.005em;
+  }
+  /* Caution — warm amber tint, dark text, distinct from red */
+  .ing.warn {
+    background: #FFE6B8;
+    border-color: #F2C56A;
+    color: #6B3A00;
+    font-weight: 600;
+  }
+  /* Stop — solid critical, white text. Reads as "do not eat this for you" */
+  .ing.alert {
+    background: var(--alert-critical);
+    border-color: var(--alert-critical);
+    color: #FFFFFF;
+    font-weight: 600;
+  }
+  .ing.ok {
+    background: color-mix(in oklab, var(--alert-success) 12%, var(--raised));
+    border-color: color-mix(in oklab, var(--alert-success) 24%, var(--b-hairline));
+    color: var(--alert-success-text);
+  }
+
+  /* Suggested chat chips (in report) */
+  .chip-row { display: flex; flex-direction: column; gap: 8px; }
+  .chip {
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: 999px;
+    padding: 13px 18px;
+    font-size: 14.5px; font-weight: 500; cursor: pointer;
+    text-align: left;
+    color: var(--t-primary);
+    transition: background .15s ease;
+    line-height: 1.35;
+    font-family: inherit;
+    letter-spacing: -.005em;
+  }
+  .chip:hover { background: var(--sunken); }
+  .chip .q {
+    color: var(--t-tertiary); margin-right: 8px;
+    font-family: 'Geist Mono', monospace;
+  }
+
+  .chat-cta {
+    margin-top: 12px; width: 100%;
+    background: var(--inverse);
+    color: var(--t-inverse);
+    border: 0; border-radius: var(--r-md);
+    padding: 16px;
+    font-weight: 600; font-size: 16px;
+    letter-spacing: -.01em;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-family: inherit;
+    transition: background-color 120ms;
+  }
+  .chat-cta:hover { background: var(--inverse-2); }
+  .chat-cta svg { width: 16px; height: 16px; }
+
+  /* ===== AI pitch — monochrome. Distinguished by surface tone, not hue. ===== */
+  .ai-pitch {
+    margin-top: 32px;        /* visual gap from alerts-block above */
+    background: var(--ai-surface);
+    border-radius: var(--r-lg);
+    padding: 24px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  .ai-orb {
+    width: 72px; height: 72px; border-radius: 999px;
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    display: grid; place-items: center;
+  }
+  .ai-orb-ring {
+    width: 48px; height: 48px; border-radius: 999px;
+    background: var(--ai-surface);
+    border: 1px solid var(--b-hairline);
+    display: grid; place-items: center;
+  }
+  .ai-orb-ring svg { color: var(--ai-ink); width: 20px; height: 20px; }
+  .ai-pitch-heading {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.03em;
+    text-align: center; line-height: 1.1; margin: 0;
+    color: var(--t-primary);
+  }
+  .ai-pitch-desc {
+    font-size: 13px; color: var(--t-secondary); text-align: center;
+    letter-spacing: -.005em; line-height: 1.4; margin: -4px 0 0; max-width: 260px;
+  }
+  /* Suggestion bubbles — right-aligned, variable width */
+  .ai-bubbles {
+    display: flex; flex-direction: column;
+    align-items: flex-end;
+    gap: 7px; width: 100%;
+  }
+  /* Bubbles read as user-side suggestions — solid ink on neutral surface */
+  .ai-bubble {
+    display: inline-flex; align-items: center; gap: 9px;
+    max-width: 88%;
+    background: var(--ai-ink);
+    border-radius: 18px 18px 4px 18px;
+    padding: 11px 12px 11px 16px;
+    border: 0;
+    font-size: 14px; font-family: inherit; font-weight: 500;
+    color: var(--t-inverse); letter-spacing: -.01em; line-height: 1.3;
+    text-align: left; cursor: pointer;
+    transition: background 120ms;
+  }
+  .ai-bubble:hover {
+    background: var(--ai-ink-2);
+  }
+  .ai-bubble-send {
+    width: 22px; height: 22px; border-radius: 999px;
+    background: rgba(255,255,255,.14);
+    display: grid; place-items: center;
+    flex-shrink: 0; color: var(--t-inverse);
+    transition: background 120ms;
+  }
+  .ai-bubble:hover .ai-bubble-send {
+    background: rgba(255,255,255,.22);
+  }
+  .ai-bubble-send svg { width: 10px; height: 10px; }
+  /* In-report AI input */
+  .ai-input-row {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--raised);
+    border-radius: 999px;
+    padding: 6px 6px 6px 16px;
+    border: 1px solid var(--b-hairline);
+    box-shadow: 0 4px 16px rgba(10,10,10,.08), 0 1px 3px rgba(10,10,10,.04);
+    width: 100%;
+  }
+  .ai-input-row input {
+    flex: 1; min-width: 0;
+    border: 0; outline: 0; background: transparent;
+    font-family: inherit; font-size: 15px; letter-spacing: -.005em;
+    color: var(--t-primary); padding: 8px 0;
+  }
+  .ai-input-row input::placeholder { color: var(--t-tertiary); }
+  .ai-input-row .send {
+    width: 36px; height: 36px;
+    border-radius: 999px; border: 0;
+    background: var(--ai-ink); color: var(--t-inverse);
+    display: grid; place-items: center;
+    cursor: pointer; flex-shrink: 0;
+    transition: background-color 120ms, transform 120ms;
+  }
+  .ai-input-row .send:hover { background: var(--ai-ink-2); }
+  .ai-input-row .send:active { transform: scale(.94); }
+  .ai-input-row .send:disabled { opacity: .35; cursor: not-allowed; background: var(--t-tertiary); }
+  .ai-input-row .send svg { width: 16px; height: 16px; }
+
+  /* Similar carousel */
+  .alt-scroll {
+    display: flex; gap: 12px;
+    overflow-x: auto;
+    padding: 4px 0 4px 0;
+    scroll-snap-type: x mandatory;
+  }
+  .alt-scroll::-webkit-scrollbar { display: none; }
+  .alt-card {
+    flex: 0 0 168px;
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: var(--r-lg);
+    padding: 14px;
+    scroll-snap-align: start;
+    cursor: pointer;
+  }
+  .alt-card .photo {
+    width: 100%; height: 100px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    display: grid; place-items: center;
+    color: #fff;
+    font-weight: 700; font-size: 32px;
+    letter-spacing: -0.04em;
+    position: relative;
+  }
+  .alt-card .photo[data-tone="amber"] { background: linear-gradient(135deg, #3A1F0A, #6B3211); color: #FFE0B0; }
+  .alt-card .photo[data-tone="green"] { background: linear-gradient(135deg, #1A4A2A, #2E7B47); color: #C6F0D5; }
+  .alt-card .photo[data-tone="cream"] { background: linear-gradient(135deg, #4A3A1A, #8B6B2D); color: #F0E2A8; }
+  .alt-card .photo[data-tone="rose"]  { background: linear-gradient(135deg, #4A2A3A, #8B4A6B); color: #F0C5DD; }
+  .alt-card .name {
+    font-size: 14.5px; line-height: 1.3; font-weight: 600;
+    color: var(--t-primary);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    margin-bottom: 4px;
+    letter-spacing: -.01em;
+  }
+  .alt-card .row {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .alt-card .brand {
+    font-size: 11px; color: var(--t-tertiary);
+    font-family: 'Geist Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .ns-mini {
+    width: 32px; height: 32px; border-radius: 8px;
+    color: white; font-weight: 700; font-size: 18px;
+    display: grid; place-items: center;
+    line-height: 1; letter-spacing: -.04em;
+    flex-shrink: 0;
+  }
+  .alt-card .photo .ns-mini {
+    position: absolute;
+    bottom: 6px; right: 6px;
+  }
+
+  /* ============================================
+     SCREEN 3 — PROFILE
+  ============================================ */
+  #screen-profile { background: var(--canvas); }
+  .profile-header {
+    padding: 70px 20px 24px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .avatar {
+    width: 80px; height: 80px; border-radius: 999px;
+    background: linear-gradient(135deg, #3A3A3A, #1A1A1A);
+    color: white; display: grid; place-items: center;
+    font-size: 28px; font-weight: 700; letter-spacing: -.04em;
+  }
+  .profile-header .info { flex: 1; }
+  .profile-header .name {
+    font-weight: 700; font-size: 28px;
+    letter-spacing: -.025em;
+    line-height: 1.05;
+  }
+  .profile-header .email {
+    font-size: 13px; color: var(--t-secondary);
+    margin-top: 4px;
+    font-family: 'Geist Mono', monospace;
+  }
+  .profile-header .badge {
+    margin-top: 10px;
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--inverse);
+    color: var(--t-inverse);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+
+  .empty-banner {
+    background: var(--inverse);
+    color: var(--t-inverse);
+    padding: 18px;
+    margin: 0 16px 4px;
+    border-radius: var(--r-lg);
+    display: flex; align-items: center; gap: 14px;
+    font-size: 14px; line-height: 1.4;
+    cursor: pointer;
+  }
+  .empty-banner.hidden { display: none; }
+  .empty-banner .ico { color: rgba(255,255,255,.7); flex-shrink: 0; }
+  .empty-banner .ico svg { width: 20px; height: 20px; }
+  .empty-banner .body { flex: 1; }
+  .empty-banner .body b { font-weight: 700; letter-spacing: -.01em; }
+  .empty-banner button {
+    background: var(--t-inverse); color: var(--inverse);
+    border: 0; border-radius: 999px;
+    padding: 7px 14px; font-size: 12px; font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: -.005em;
+  }
+
+  .profile-body {
+    flex: 1;
+    overflow: auto;
+    padding: 0 16px 110px;
+  }
+  .profile-body::-webkit-scrollbar { width: 0; }
+
+  /* Profile section title — matches .section-title (title/l, no rule line) */
+  .pf-section { margin-top: 32px; }
+  .pf-section .title {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: baseline;
+    column-gap: 10px;
+    padding: 0 4px;
+    margin-bottom: 14px;
+  }
+  .pf-section .title .name {
+    font-size: 24px; font-weight: 600;
+    letter-spacing: -.01em; line-height: 1.2;
+    color: var(--t-primary);
+  }
+  .pf-section .title .count {
+    font-size: 16px; color: var(--t-tertiary);
+    font-weight: 500;
+    line-height: 1.2;
+  }
+  .pf-section .title .count:not(:empty)::before { content: '· '; }
+  .pf-section .title .small-muted { justify-self: end; }
+  .pf-section .title .lead {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    font-size: 14px; line-height: 1.4;
+    color: var(--t-secondary);
+    letter-spacing: -.005em;
+  }
+
+  .pf-card {
+    background: var(--raised);
+    border-radius: var(--r-lg);
+    padding: 16px;
+    border: 1px solid var(--b-hairline);
+  }
+  .chip-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pchip {
+    border: 1px solid var(--b-hairline);
+    background: var(--raised);
+    border-radius: 999px;
+    padding: 9px 14px;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer;
+    transition: background-color 120ms, color 120ms, border-color 120ms;
+    user-select: none;
+    color: var(--t-primary);
+    font-family: inherit;
+    letter-spacing: -.005em;
+  }
+  .pchip:hover { background: var(--sunken); }
+  .pchip.active {
+    background: var(--inverse);
+    color: var(--t-inverse); border-color: var(--inverse);
+  }
+  .pchip.crit.active,
+  .pchip.warn.active { background: var(--inverse); border-color: var(--inverse); color: var(--t-inverse); }
+
+  .row-list .row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--b-hairline);
+    cursor: pointer;
+    font-size: 16px;
+  }
+  .row-list .row:last-child { border-bottom: 0; }
+  .row .lbl {
+    display: flex; align-items: center; gap: 14px;
+    color: var(--t-primary);
+    font-weight: 500;
+  }
+  .row .ico {
+    width: 24px; height: 24px;
+    display: grid; place-items: center;
+    color: var(--t-secondary);
+    flex-shrink: 0;
+  }
+  .row .ico svg { width: 20px; height: 20px; }
+  .row .ico.flag {
+    width: 20px; height: 14px; border-radius: 2px;
+    overflow: hidden;
+    background: linear-gradient(180deg, #B22234 0 33.3%, #fff 33.3% 66.6%, #B22234 66.6%);
+    border: 1px solid var(--b-hairline);
+  }
+  .row .val {
+    color: var(--t-secondary); font-size: 14px;
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'Geist Mono', monospace;
+  }
+  .row .val svg { width: 16px; height: 16px; color: var(--t-tertiary); }
+
+  textarea.about-text {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    resize: vertical;
+    min-height: 80px;
+    font-family: inherit;
+    font-size: 14.5px;
+    color: var(--t-primary);
+    outline: none;
+    padding: 0;
+    line-height: 1.5;
+  }
+  textarea.about-text::placeholder { color: var(--t-tertiary); }
+
+  /* Edit button in pf-section title (v2) */
+  .pf-edit {
+    justify-self: end;
+    align-self: center;
+    background: var(--sunken);
+    border: 0;
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--t-primary);
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: -.005em;
+    transition: background-color 120ms;
+  }
+  .pf-edit:hover { background: var(--b-hairline); }
+  .pf-edit:active { transform: scale(.97); }
+
+  /* V2 — chip sections become read-only summaries.
+     Only selected chips render; the full picker lives in the edit sheet. */
+  body[data-version="2"] #screen-profile .chip-grid .pchip {
+    pointer-events: none;
+    cursor: default;
+  }
+  body[data-version="2"] #screen-profile .chip-grid .pchip:not(.active) {
+    display: none;
+  }
+  body[data-version="2"] #screen-profile .chip-grid:not(:has(.pchip.active))::after {
+    content: 'None added — tap Edit to set up.';
+    color: var(--t-tertiary);
+    font-size: 14px;
+    letter-spacing: -.005em;
+  }
+
+  /* ============================================
+     PROFILE — EDIT SHEET (v2)
+  ============================================ */
+  #screen-profile-edit { background: rgba(0,0,0,.5); }
+  #screen-profile-edit::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,.45);
+    backdrop-filter: blur(2px);
+  }
+  .pe-section-header {
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    font-family: 'Geist Mono', monospace;
+    color: var(--t-tertiary);
+    padding: 18px 4px 8px;
+  }
+  .pe-section-header:first-child { padding-top: 4px; }
+  .pe-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--b-hairline);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 120ms;
+  }
+  .pe-row:hover { background: var(--sunken); }
+  .pe-row:active { background: var(--b-hairline); }
+  .pe-row .pe-label {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--t-primary);
+    letter-spacing: -.005em;
+  }
+  .pe-row .pe-tag {
+    font-size: 11px;
+    font-family: 'Geist Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--t-tertiary);
+    margin-left: 8px;
+  }
+  .pe-row .pe-tag.crit { color: var(--alert-critical); }
+  .pe-row .pe-tag.warn { color: var(--alert-warning); }
+  .pe-row .pe-check {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    border-radius: 999px;
+    border: 1.5px solid var(--b-hairline);
+    background: var(--canvas);
+    display: grid; place-items: center;
+    color: transparent;
+    transition: background-color 140ms, border-color 140ms, color 140ms;
+  }
+  .pe-row .pe-check svg { width: 14px; height: 14px; }
+  .pe-row.selected .pe-check {
+    background: var(--inverse);
+    border-color: var(--inverse);
+    color: var(--t-inverse);
+  }
+  .pe-empty {
+    padding: 24px 4px;
+    color: var(--t-tertiary);
+    font-size: 14px;
+  }
+
+  /* ============================================
+     SCREEN 4 — AI CHAT
+  ============================================ */
+  .chat-header {
+    padding: 60px 12px 12px;
+    background: var(--canvas);
+    border-bottom: 1px solid var(--b-hairline);
+    display: flex; align-items: center; gap: 6px;
+    z-index: 5;
+  }
+  .chat-back {
+    width: 40px; height: 40px; border-radius: 999px;
+    background: transparent; border: 0; cursor: pointer;
+    display: grid; place-items: center;
+    color: var(--t-primary);
+    transition: background-color 120ms;
+  }
+  .chat-back:hover { background: var(--sunken); }
+  .chat-back svg { width: 20px; height: 20px; }
+  .chat-title { flex: 1; min-width: 0; text-align: center; }
+  .chat-title .name {
+    font-weight: 700; font-size: 17px;
+    letter-spacing: -.02em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .chat-title .sub {
+    font-size: 10px; color: var(--t-tertiary);
+    margin-top: 3px;
+    font-family: 'Geist Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+  }
+  .chat-mode-toggle {
+    display: flex; gap: 2px;
+    background: var(--sunken);
+    border-radius: 999px;
+    padding: 3px;
+  }
+  .chat-mode-toggle button {
+    background: transparent; border: 0;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    color: var(--t-secondary);
+    font-family: 'Geist Mono', monospace;
+    letter-spacing: .08em;
+  }
+  .chat-mode-toggle button.active {
+    background: var(--raised);
+    color: var(--t-primary);
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .chat-history-btn {
+    width: 40px; height: 40px; border-radius: 999px;
+    background: transparent; border: 0; cursor: pointer;
+    color: var(--t-primary);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    transition: background-color 120ms;
+  }
+  .chat-history-btn:hover { background: var(--sunken); }
+  .chat-history-btn svg { width: 20px; height: 20px; }
+
+  .pinned-card {
+    margin: 12px 16px 0;
+    background: var(--raised);
+    border-radius: var(--r-md);
+    padding: 12px;
+    display: flex; gap: 12px; align-items: center;
+    border: 1px solid var(--b-hairline);
+    cursor: pointer;
+    transition: opacity .25s ease, max-height .25s ease, margin .25s ease, padding .25s ease, background-color 120ms;
+    overflow: hidden;
+  }
+  .pinned-card:hover { background: var(--sunken); }
+  .pinned-card.hidden {
+    opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-top: 0;
+    border: 0;
+  }
+  .pinned-card .photo {
+    width: 44px; height: 44px; border-radius: 10px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    color: #fff; font-weight: 700; font-size: 18px;
+    letter-spacing: -0.04em;
+  }
+  .pinned-card .photo[data-tone="amber"] { background: linear-gradient(135deg, #3A1F0A, #6B3211); color: #FFE0B0; }
+  .pinned-card .photo[data-tone="green"] { background: linear-gradient(135deg, #1A4A2A, #2E7B47); color: #C6F0D5; }
+  .pinned-card .photo[data-tone="cream"] { background: linear-gradient(135deg, #4A3A1A, #8B6B2D); color: #F0E2A8; }
+  .pinned-card .info { flex: 1; min-width: 0; }
+  .pinned-card .name {
+    font-size: 15px; font-weight: 700;
+    letter-spacing: -.015em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pinned-card .brand {
+    font-size: 11px; color: var(--t-tertiary);
+    font-family: 'Geist Mono', monospace;
+    margin-top: 1px;
+  }
+
+  .chat-body {
+    flex: 1; overflow: auto;
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .chat-body::-webkit-scrollbar { width: 0; }
+
+  .welcome {
+    text-align: center;
+    padding: 32px 16px 8px;
+  }
+  .welcome .icon {
+    width: 56px; height: 56px;
+    border-radius: 999px;
+    background: var(--ai-ink);
+    color: var(--t-inverse);
+    display: grid; place-items: center;
+    margin: 0 auto 18px;
+    box-shadow: 0 0 0 6px var(--ai-surface);
+  }
+  .welcome .icon svg { width: 26px; height: 26px; }
+  .welcome h3 {
+    margin: 0 0 8px; font-size: 24px;
+    letter-spacing: -.025em;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .welcome p {
+    margin: 0; color: var(--t-secondary); font-size: 14.5px;
+    line-height: 1.45;
+    max-width: 280px; margin-left: auto; margin-right: auto;
+  }
+
+  .suggestion-chips {
+    display: flex; flex-direction: column; gap: 8px;
+    margin-top: 20px;
+  }
+  .suggestion {
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: 999px;
+    padding: 13px 18px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14.5px;
+    color: var(--t-primary);
+    line-height: 1.35;
+    font-family: inherit;
+    font-weight: 500;
+    transition: background-color 120ms;
+    letter-spacing: -.005em;
+  }
+  .suggestion:hover { background: var(--sunken); }
+
+  .bubble {
+    max-width: 80%;
+    padding: 13px 16px;
+    border-radius: var(--r-lg);
+    font-size: 16px;
+    line-height: 1.45;
+    word-wrap: break-word;
+    animation: bubble-in .25s cubic-bezier(.2,0,0,1);
+    letter-spacing: -.005em;
+  }
+  @keyframes bubble-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .bubble.user {
+    align-self: flex-end;
+    background: var(--inverse);
+    color: var(--t-inverse);
+  }
+  .bubble.ai {
+    align-self: flex-start;
+    background: var(--raised);
+    color: var(--t-primary);
+    border: 1px solid var(--b-hairline);
+  }
+  .bubble.ai b { font-weight: 700; }
+
+  .bubble-card {
+    align-self: flex-start;
+    max-width: 85%;
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: var(--r-md);
+    padding: 12px;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer;
+    transition: background-color 120ms;
+  }
+  .bubble-card:hover { background: var(--sunken); }
+  .bubble-card .photo {
+    width: 48px; height: 48px; border-radius: 10px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    color: #fff; font-weight: 700; font-size: 18px;
+    letter-spacing: -0.04em;
+  }
+  .bubble-card .photo[data-tone="amber"] { background: linear-gradient(135deg, #3A1F0A, #6B3211); color: #FFE0B0; }
+  .bubble-card .photo[data-tone="green"] { background: linear-gradient(135deg, #1A4A2A, #2E7B47); color: #C6F0D5; }
+  .bubble-card .photo[data-tone="cream"] { background: linear-gradient(135deg, #4A3A1A, #8B6B2D); color: #F0E2A8; }
+  .bubble-card .photo[data-tone="rose"]  { background: linear-gradient(135deg, #4A2A3A, #8B4A6B); color: #F0C5DD; }
+  .bubble-card .info { flex: 1; min-width: 0; }
+  .bubble-card .name {
+    font-size: 14.5px; font-weight: 700;
+    letter-spacing: -.015em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .bubble-card .brand {
+    font-size: 11px; color: var(--t-tertiary);
+    font-family: 'Geist Mono', monospace;
+    margin-top: 2px;
+  }
+
+  .typing {
+    align-self: flex-start;
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    padding: 12px 16px;
+    border-radius: var(--r-lg);
+    display: flex; gap: 4px; align-items: center;
+  }
+  .typing span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--t-tertiary);
+    animation: typing 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: .15s; }
+  .typing span:nth-child(3) { animation-delay: .3s; }
+  @keyframes typing {
+    0%,60%,100% { opacity: .3; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-3px); }
+  }
+
+  .chat-input {
+    padding: 10px 14px 24px;
+    background: var(--canvas);
+    border-top: 1px solid var(--b-hairline);
+    display: flex; gap: 8px; align-items: center;
+  }
+  .chat-input .field {
+    flex: 1;
+    background: var(--sunken);
+    border-radius: 999px;
+    padding: 12px 18px;
+    font-size: 15px;
+    border: 0; outline: none;
+    color: var(--t-primary);
+    font-family: inherit;
+    font-weight: 500;
+  }
+  .chat-input .field::placeholder { color: var(--t-tertiary); }
+  .chat-input .send {
+    width: 40px; height: 40px; border-radius: 999px;
+    background: var(--inverse);
+    border: 0; cursor: pointer;
+    color: var(--t-inverse);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    transition: background-color 120ms, opacity 120ms;
+  }
+  .chat-input .send:hover { background: var(--inverse-2); }
+  .chat-input .send:disabled { opacity: .3; cursor: not-allowed; }
+  .chat-input .send svg { width: 18px; height: 18px; }
+
+  .toast {
+    position: absolute; top: 64px; left: 50%; transform: translate(-50%, -16px);
+    background: var(--inverse);
+    color: var(--t-inverse);
+    padding: 10px 16px; border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity .25s ease, transform .25s ease;
+    pointer-events: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    font-family: 'Geist Mono', monospace;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* utility */
+  .row-between { display: flex; align-items: center; justify-content: space-between; }
+  .mt-12 { margin-top: 12px; }
+  .mt-16 { margin-top: 16px; }
+  .small-muted {
+    font-size: 11px; color: var(--t-tertiary);
+    font-family: 'Geist Mono', monospace;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .legend {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--b-hairline);
+  }
+  .legend .dot {
+    width: 8px; height: 8px; border-radius: 999px;
+    display: inline-block; margin-right: 6px; vertical-align: middle;
+  }
+  .legend span {
+    font-size: 11px; color: var(--t-secondary);
+    font-family: 'Geist Mono', monospace;
+    letter-spacing: .04em;
+  }
+
+  /* ================================================
+     Version toggle (v1 / v2) — global frame switch
+     ================================================ */
+  .version-toggle {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--sunken);
+    border-radius: 999px;
+    padding: 3px;
+    margin-top: 14px;
+  }
+  .version-toggle button {
+    background: transparent;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 18px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--t-secondary);
+    font-family: 'Geist Mono', monospace;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .version-toggle button.active {
+    background: var(--inverse);
+    color: var(--t-inverse);
+    box-shadow: 0 1px 2px rgba(0,0,0,.06);
+  }
+
+  body[data-version="1"] .v2-only { display: none !important; }
+  body[data-version="2"] .v1-only { display: none !important; }
+
+  /* ============================================
+     SCREEN 5 — HISTORY (v2 only)
+  ============================================ */
+  #screen-history { background: var(--canvas); }
+  .history-header {
+    padding: 70px 20px 18px;
+  }
+  .history-header .title {
+    font-size: 28px; font-weight: 700;
+    letter-spacing: -.025em;
+    line-height: 1.05;
+    color: var(--t-primary);
+  }
+  .history-header .sub {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--t-tertiary);
+    font-family: 'Geist Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+  }
+  .history-body {
+    flex: 1;
+    overflow: auto;
+    padding: 0 16px 110px;
+  }
+  .history-body::-webkit-scrollbar { width: 0; }
+  .history-list {
+    display: flex; flex-direction: column;
+    gap: 10px;
+  }
+  .h-item {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: var(--r-lg);
+    padding: 14px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    width: 100%;
+    transition: background-color 120ms;
+  }
+  .h-item:hover { background: var(--sunken); }
+  .h-item .photo {
+    width: 56px; height: 56px; border-radius: var(--r-md);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    color: #fff;
+    font-weight: 700; font-size: 24px;
+    letter-spacing: -0.04em;
+  }
+  .h-item .photo[data-tone="amber"] { background: linear-gradient(135deg, #3A1F0A, #6B3211); color: #FFE0B0; }
+  .h-item .photo[data-tone="green"] { background: linear-gradient(135deg, #1A4A2A, #2E7B47); color: #C6F0D5; }
+  .h-item .photo[data-tone="cream"] { background: linear-gradient(135deg, #4A3A1A, #8B6B2D); color: #F0E2A8; }
+  .h-item .photo[data-tone="rose"]  { background: linear-gradient(135deg, #4A2A3A, #8B4A6B); color: #F0C5DD; }
+  .h-item .info { flex: 1; min-width: 0; }
+  .h-item .name {
+    font-size: 16px; font-weight: 700;
+    letter-spacing: -.015em;
+    line-height: 1.2;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--t-primary);
+  }
+  .h-item .verdict-line {
+    margin-top: 6px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .h-item .v-badge {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    display: grid; place-items: center;
+    font-size: 18px; font-weight: 700;
+    color: #fff;
+    letter-spacing: -.04em;
+    flex-shrink: 0;
+    line-height: 1;
+    font-feature-settings: 'tnum';
+  }
+  .h-item .v-badge.ns-c { color: #1A1500; }
+  .h-item .v-badge.ns-na { background: var(--sunken); color: var(--t-tertiary); font-size: 14px; }
+  .h-item .v-word {
+    font-size: 14px; font-weight: 600;
+    letter-spacing: -.005em;
+  }
+  .h-item.score-a .v-word { color: var(--ns-a-text); }
+  .h-item.score-b .v-word { color: var(--ns-b-text); }
+  .h-item.score-c .v-word { color: var(--ns-c-text); }
+  .h-item.score-d .v-word { color: var(--ns-d-text); }
+  .h-item.score-e .v-word { color: var(--ns-e-text); }
+  .h-item.score-na .v-word { color: var(--t-secondary); }
+  .h-item .h-date {
+    font-size: 11px;
+    color: var(--t-tertiary);
+    font-family: 'Geist Mono', monospace;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .h-chev {
+    color: var(--t-tertiary);
+    flex-shrink: 0;
+  }
+  .h-chev svg { width: 18px; height: 18px; }
+
+  .history-empty {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--t-secondary);
+  }
+  .history-empty .ico {
+    width: 72px; height: 72px;
+    border-radius: 22px;
+    background: var(--sunken);
+    display: grid; place-items: center;
+    margin: 0 auto 18px;
+    color: var(--t-tertiary);
+  }
+  .history-empty .ico svg { width: 36px; height: 36px; }
+  .history-empty h3 {
+    font-size: 22px; font-weight: 700;
+    letter-spacing: -.02em;
+    margin: 0 0 8px;
+    color: var(--t-primary);
+  }
+  .history-empty p {
+    margin: 0 auto;
+    font-size: 14px;
+    line-height: 1.45;
+    max-width: 240px;
+  }
+
+  /* ============================================
+     SCREEN — PAST CHATS (v2 only)
+  ============================================ */
+  #screen-chat-history { background: var(--canvas); }
+  .ch-header {
+    padding: 60px 12px 12px;
+    background: var(--canvas);
+    border-bottom: 1px solid var(--b-hairline);
+    display: flex; align-items: center; gap: 6px;
+    z-index: 5;
+  }
+  .ch-header .title {
+    flex: 1; min-width: 0; text-align: center;
+    font-weight: 700; font-size: 17px;
+    letter-spacing: -.02em;
+  }
+  .ch-header .spacer { width: 40px; flex-shrink: 0; }
+  .ch-body {
+    flex: 1; overflow: auto;
+    padding: 12px 16px 32px;
+  }
+  .ch-body::-webkit-scrollbar { width: 0; }
+  .ch-meta {
+    font-size: 11px; color: var(--t-tertiary);
+    font-family: 'Geist Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    padding: 6px 4px 12px;
+  }
+  .ch-list {
+    display: flex; flex-direction: column;
+    gap: 8px;
+  }
+  .ch-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: var(--r-md);
+    padding: 14px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    width: 100%;
+    transition: background-color 120ms;
+  }
+  .ch-item:hover { background: var(--sunken); }
+  .ch-item .photo {
+    width: 40px; height: 40px; border-radius: 10px;
+    flex-shrink: 0; display: grid; place-items: center;
+    color: #fff; font-weight: 700; font-size: 16px;
+    letter-spacing: -0.04em;
+  }
+  .ch-item .photo[data-tone="amber"] { background: linear-gradient(135deg, #3A1F0A, #6B3211); color: #FFE0B0; }
+  .ch-item .photo[data-tone="green"] { background: linear-gradient(135deg, #1A4A2A, #2E7B47); color: #C6F0D5; }
+  .ch-item .photo[data-tone="cream"] { background: linear-gradient(135deg, #4A3A1A, #8B6B2D); color: #F0E2A8; }
+  .ch-item .photo[data-tone="rose"]  { background: linear-gradient(135deg, #4A2A3A, #8B4A6B); color: #F0C5DD; }
+  .ch-item .photo[data-tone="ai"] {
+    background: var(--ai-ink);
+    color: var(--t-inverse);
+  }
+  .ch-item .photo[data-tone="ai"] svg { width: 18px; height: 18px; }
+  .ch-item .info { flex: 1; min-width: 0; }
+  .ch-item .top-row {
+    display: flex; align-items: baseline; gap: 8px;
+    justify-content: space-between;
+  }
+  .ch-item .name {
+    font-size: 15px; font-weight: 700;
+    letter-spacing: -.015em;
+    line-height: 1.25;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .ch-item .when {
+    font-size: 10px; color: var(--t-tertiary);
+    font-family: 'Geist Mono', monospace;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .ch-item .preview {
+    font-size: 13.5px; color: var(--t-secondary);
+    margin-top: 4px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .ch-empty {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--t-secondary);
+  }
+  .ch-empty .ico {
+    width: 56px; height: 56px;
+    border-radius: 18px;
+    background: var(--sunken);
+    display: grid; place-items: center;
+    margin: 0 auto 16px;
+    color: var(--t-tertiary);
+  }
+  .ch-empty .ico svg { width: 28px; height: 28px; }
+  .ch-empty h3 {
+    font-size: 20px; font-weight: 700;
+    letter-spacing: -.02em;
+    margin: 0 0 6px;
+    color: var(--t-primary);
+  }
+  .ch-empty p {
+    margin: 0 auto;
+    font-size: 14px;
+    line-height: 1.45;
+    max-width: 240px;
+  }
+
+  /* ============================================
+     v2 — Camera scan-sheet
+     Half-height sheet that expands to full report on grip-tap
+  ============================================ */
+  .cam-sheet {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: var(--canvas);
+    border-top-left-radius: var(--r-xl);
+    border-top-right-radius: var(--r-xl);
+    box-shadow: var(--shadow-sheet);
+    z-index: 25;
+    height: 56%;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    transform: translateY(100%);
+    transition: transform .42s cubic-bezier(.2,.8,.2,1),
+                height .42s cubic-bezier(.2,.8,.2,1);
+  }
+  .cam-sheet.visible { transform: translateY(0); }
+  .cam-sheet.expanded { height: 92%; }
+
+  .cs-grip-area {
+    flex-shrink: 0;
+    padding: 8px 16px 6px;
+    cursor: grab;
+    user-select: none;
+  }
+  .cs-grip-area:active { cursor: grabbing; }
+  .cs-grip {
+    width: 36px; height: 4px;
+    background: var(--b-hairline);
+    border-radius: 999px;
+    margin: 0 auto;
+  }
+  .cs-header {
+    flex-shrink: 0;
+    padding: 4px 20px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .cs-header .cs-title {
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    font-family: 'Geist Mono', monospace;
+    color: var(--t-tertiary);
+  }
+  .cs-close {
+    width: 32px; height: 32px; border-radius: 999px;
+    background: var(--sunken); color: var(--t-primary);
+    border: 0; cursor: pointer; display: grid; place-items: center;
+    transition: background-color 120ms;
+  }
+  .cs-close:hover { background: var(--b-hairline); }
+  .cs-close svg { width: 14px; height: 14px; }
+
+  .cs-body {
+    flex: 1;
+    overflow: auto;
+    padding: 0 20px 32px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cs-body::-webkit-scrollbar { width: 0; }
+
+  .cs-expand-hint {
+    text-align: center;
+    color: var(--t-tertiary);
+    font-size: 11px;
+    font-family: 'Geist Mono', monospace;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    margin-top: 18px;
+    padding: 10px 0 6px;
+    cursor: pointer;
+    transition: color 120ms;
+  }
+  .cs-expand-hint:hover { color: var(--t-secondary); }
+  .cam-sheet.expanded .cs-expand-hint { display: none; }
+
+  /* ================================================
+     Delight — single-shot exponential reveals
+     · No bounce, no elastic, no glow loops
+     · Each animation runs once per screen activation
+     ================================================ */
+
+  /* Sheet body stagger — verdict and ai-pitch land like a curtain raise */
+  .screen.active .sheet-body > * {
+    animation: rise-in 540ms cubic-bezier(.16,1,.3,1) backwards;
+  }
+  .screen.active .sheet-body > *:nth-child(1) { animation-delay:   0ms; }
+  .screen.active .sheet-body > *:nth-child(2) { animation-delay:  90ms; }
+  .screen.active .sheet-body > *:nth-child(3) { animation-delay: 180ms; }
+  .screen.active .sheet-body > *:nth-child(4) { animation-delay: 260ms; }
+  .screen.active .sheet-body > *:nth-child(5) { animation-delay: 340ms; }
+  .screen.active .sheet-body > *:nth-child(6) { animation-delay: 410ms; }
+  .screen.active .sheet-body > *:nth-child(7) { animation-delay: 470ms; }
+  .screen.active .sheet-body > *:nth-child(8) { animation-delay: 520ms; }
+  .screen.active .sheet-body > *:nth-child(9) { animation-delay: 560ms; }
+  .screen.active .sheet-body > *:nth-child(n+10) { animation-delay: 600ms; }
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Mini-card score chip — lands ~200ms after the card, asserting alert-first hierarchy */
+  .mini-card .mc-score-chip {
+    opacity: 0;
+    transform: scale(.85);
+    transition: opacity 360ms cubic-bezier(.16,1,.3,1) 200ms,
+                transform 420ms cubic-bezier(.16,1,.3,1) 200ms;
+  }
+  .mini-card.visible .mc-score-chip {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  /* Mini-card alert badge — radar ping expanding outward, once on entrance, in severity hue */
+  .mc-alert-hero .mc-alert-badge { position: relative; }
+  .mc-alert-hero .mc-alert-badge::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    border: 2px solid currentColor;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .mini-card.visible .mc-alert-badge::after {
+    animation: badge-ping 1100ms cubic-bezier(.16,1,.3,1) 320ms 1;
+  }
+  .mc-alert-hero.danger  .mc-alert-badge::after { color: var(--alert-critical); }
+  .mc-alert-hero.warn    .mc-alert-badge::after { color: var(--alert-warning); }
+  .mc-alert-hero.info    .mc-alert-badge::after { color: var(--alert-info); }
+  .mc-alert-hero.success .mc-alert-badge::after { color: var(--alert-success); }
+  @keyframes badge-ping {
+    0%   { opacity: .55; transform: scale(1); }
+    100% { opacity: 0;   transform: scale(2.0); }
+  }
+
+  /* Profile chip — single punch on toggle-on. No bounce, just decisive snap-and-settle */
+  .pchip.active {
+    animation: chip-punch 280ms cubic-bezier(.16,1,.3,1);
+  }
+  @keyframes chip-punch {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.045); }
+    100% { transform: scale(1); }
+  }
+
+  /* Reduced motion — collapse all animations to instant state changes */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ ICON DEFS ============ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="6.5" width="18" height="13.5" rx="3"/>
+      <path d="M9 6.5 L10 4 L14 4 L15 6.5"/>
+      <circle cx="12" cy="13.5" r="3.5"/>
+    </symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 8 a3 3 0 0 1 3-3 h11 a3 3 0 0 1 3 3 v7 a3 3 0 0 1-3 3 h-6 l-4 3 v-3 h-1 a3 3 0 0 1-3-3 z"/>
+    </symbol>
+    <symbol id="i-profile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="9" r="3.5"/>
+      <path d="M5 20 c0-3.5 3-6.2 7-6.2 s7 2.7 7 6.2"/>
+    </symbol>
+    <symbol id="i-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 5 L16 12 L9 19"/>
+    </symbol>
+    <symbol id="i-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 9 L12 16 L19 9"/>
+    </symbol>
+    <symbol id="i-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 5 L8 12 L15 19"/>
+    </symbol>
+    <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 6 L18 18 M18 6 L6 18"/>
+    </symbol>
+    <symbol id="i-arrow-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 5 L4 12 L11 19"/>
+      <line x1="4" y1="12" x2="20" y2="12"/>
+    </symbol>
+    <symbol id="i-flash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13 3 L4 14 H11 L10 21 L19 10 H12 Z"/>
+    </symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 8 V5.5 a1.5 1.5 0 0 1 1.5-1.5 H8"/>
+      <path d="M16 4 H18.5 a1.5 1.5 0 0 1 1.5 1.5 V8"/>
+      <path d="M20 16 V18.5 a1.5 1.5 0 0 1-1.5 1.5 H16"/>
+      <path d="M8 20 H5.5 a1.5 1.5 0 0 1-1.5-1.5 V16"/>
+      <line x1="3.5" y1="12" x2="20.5" y2="12"/>
+    </symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4.5 11.5 L20 4 L13 19.5 L11 13 Z"/>
+      <line x1="11" y1="13" x2="20" y2="4"/>
+    </symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="3" width="6" height="11" rx="3"/>
+      <path d="M5 11 a7 7 0 0 0 14 0"/>
+      <line x1="12" y1="18" x2="12" y2="21"/>
+    </symbol>
+    <symbol id="i-photo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="5" width="18" height="14" rx="2.5"/>
+      <circle cx="8" cy="10" r="1.5"/>
+      <path d="M3.5 17 L8 12.5 L13 16.5 L17 13 L20.5 16"/>
+    </symbol>
+    <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/>
+      <line x1="12" y1="11" x2="12" y2="16"/>
+      <circle cx="12" cy="8" r="0.8" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="11" width="14" height="9" rx="2"/>
+      <path d="M8 11 V8 a4 4 0 0 1 8 0 V11"/>
+    </symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 16 V11 a6 6 0 0 1 12 0 V16 L20 18 H4 Z"/>
+      <path d="M10 21 a2 2 0 0 0 4 0"/>
+    </symbol>
+    <symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/>
+      <path d="M12 7 V12 L15.5 14"/>
+    </symbol>
+    <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3 L14.5 9.2 L21 9.8 L16 14 L17.7 20.5 L12 17 L6.3 20.5 L8 14 L3 9.8 L9.5 9.2 Z"/>
+    </symbol>
+    <symbol id="i-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/>
+      <path d="M9.5 9.5 a2.5 2.5 0 0 1 5 0 c0 1.5-2.5 2-2.5 4"/>
+      <circle cx="12" cy="17" r="0.8" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 5 H6 a2 2 0 0 0-2 2 V17 a2 2 0 0 0 2 2 H9"/>
+      <path d="M16 8 L20 12 L16 16"/>
+      <line x1="20" y1="12" x2="9" y2="12"/>
+    </symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3 L13.5 9.5 L20 11 L13.5 12.5 L12 19 L10.5 12.5 L4 11 L10.5 9.5 Z"/>
+      <path d="M19 4 L19.7 5.8 L21.5 6.5 L19.7 7.2 L19 9 L18.3 7.2 L16.5 6.5 L18.3 5.8 Z"/>
+    </symbol>
+    <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 19V5M5 12l7-7 7 7"/>
+    </symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 19 C5 11 12 4 20 4 C20 12 13 19 5 19 Z"/>
+      <line x1="5" y1="19" x2="13" y2="11"/>
+    </symbol>
+    <!-- 16x16 alert glyphs -->
+    <symbol id="g-allergen" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 1.8 L14.6 13.5 H1.4 Z"/>
+      <line x1="8" y1="6" x2="8" y2="9.5"/>
+      <circle cx="8" cy="11.5" r="0.85" fill="#fff" stroke="none"/>
+    </symbol>
+    <symbol id="g-child" viewBox="0 0 16 16" fill="#fff" stroke="none">
+      <circle cx="8" cy="6" r="3.2"/>
+      <path d="M3 14 a5 5 0 0 1 10 0 Z"/>
+    </symbol>
+    <symbol id="g-goal" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="8" cy="8" r="6"/>
+      <circle cx="8" cy="8" r="3"/>
+      <circle cx="8" cy="8" r="0.8" fill="#fff" stroke="none"/>
+    </symbol>
+    <symbol id="g-ok" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8.5 L6.5 12 L13 4.5"/>
+    </symbol>
+    <symbol id="g-warn" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="8" y1="3.5" x2="8" y2="9"/>
+      <circle cx="8" cy="11.5" r="0.85" fill="#fff" stroke="none"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="stage">
+
+  <div class="stage-title">
+    <h1>AI Barcode Scanner</h1>
+    <p id="stage-subtitle">4 screens · Camera · Full Report · Profile · AI Chat</p>
+    <div class="version-toggle" id="version-toggle" role="tablist" aria-label="Prototype version">
+      <button data-ver="1" class="active" role="tab">v1</button>
+      <button data-ver="2" role="tab">v2</button>
+    </div>
+  </div>
+
+  <!-- Left panel: navigation -->
+  <aside class="panel-l">
+    <!-- V1: original panels (untouched) -->
+    <div class="panel v1-only">
+      <h3>Screens</h3>
+      <div class="nav-row" id="screen-nav">
+        <button class="pill active" data-go="camera">1. Camera</button>
+        <button class="pill" data-go="report">2. Report</button>
+        <button class="pill" data-go="profile">3. Profile</button>
+        <button class="pill" data-go="chat">4. AI Chat</button>
+        <button class="pill v2-only" data-go="history">5. History</button>
+        <button class="pill v2-only" data-go="chat-history">6. Past chats</button>
+      </div>
+    </div>
+
+    <div class="panel v1-only">
+      <h3>Demo scenarios</h3>
+      <div class="nav-row" id="demo-nav">
+        <button class="pill active" id="demo-empty">Empty state</button>
+        <button class="pill v1-only" id="demo-empty-history">Empty state with History</button>
+        <button class="pill" id="demo-bad">Scan «bad» (E)</button>
+        <button class="pill" id="demo-good">Scan «good» (A)</button>
+        <button class="pill" id="demo-na">No score</button>
+        <button class="pill v1-only" id="demo-three">Carousel: 3 scans</button>
+        <button class="pill v2-only" id="demo-history">Open History tab</button>
+        <button class="pill" id="demo-empty-profile">Empty profile</button>
+        <button class="pill" id="demo-fill-profile">Fill profile</button>
+      </div>
+    </div>
+
+    <div class="panel v1-only">
+      <h3>Color system</h3>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--ns-a)"></i>A · Excellent</span>
+        <span><i class="dot" style="background:var(--ns-b)"></i>B · Good</span>
+        <span><i class="dot" style="background:var(--ns-c)"></i>C · Moderate</span>
+        <span><i class="dot" style="background:var(--ns-d)"></i>D · Limit</span>
+        <span><i class="dot" style="background:var(--ns-e)"></i>E · Avoid</span>
+      </div>
+    </div>
+
+    <!-- V2: screen tree with substates -->
+    <div class="panel v2-only">
+      <h3>Screens</h3>
+      <div class="screen-tree" id="screen-nav-v2">
+        <div class="st-group">
+          <button class="pill st-screen active" data-go="camera">Scan</button>
+          <div class="st-states">
+            <button class="pill st-state" data-state="empty-clean">Empty</button>
+            <button class="pill st-state" data-state="bad">Scan bad</button>
+            <button class="pill st-state" data-state="good">Scan good</button>
+            <button class="pill st-state" data-state="na">Scan no score</button>
+          </div>
+        </div>
+        <div class="st-group">
+          <button class="pill st-screen" data-go="report">Report</button>
+        </div>
+        <div class="st-group">
+          <button class="pill st-screen" data-go="profile">Profile</button>
+          <div class="st-states">
+            <button class="pill st-state" data-state="empty-profile">Empty</button>
+            <button class="pill st-state" data-state="fill-profile">Filled</button>
+          </div>
+        </div>
+        <div class="st-group">
+          <button class="pill st-screen" data-go="chat">AI Chat</button>
+          <div class="st-states">
+            <button class="pill st-state" data-state="chat-a">With product (A)</button>
+            <button class="pill st-state" data-state="chat-b">No product (B)</button>
+          </div>
+        </div>
+        <div class="st-group">
+          <button class="pill st-screen" data-go="history">History</button>
+        </div>
+        <div class="st-group">
+          <button class="pill st-screen" data-go="chat-history">Past chats</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Device -->
+  <div class="device-wrap">
+    <div class="proto-control" id="proto-chat-mode" aria-label="Prototype · Chat mode">
+      <span class="label">Prototype · Chat mode</span>
+      <div class="chat-mode-toggle" id="chat-mode-toggle">
+        <button data-mode="a" class="active">A · with product</button>
+        <button data-mode="b">B · no product</button>
+      </div>
+    </div>
+    <div class="device">
+      <div class="device-screen">
+
+        <!-- ==== SCREEN 1: Camera ==== -->
+        <section class="screen active" id="screen-camera">
+          <div class="status-bar dark">
+            <span>9:41</span>
+            <span class="icons">
+              <svg viewBox="0 0 16 11"><path d="M1 7.5C3 5.5 5 4.5 8 4.5s5 1 7 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="8" cy="9" r="1.2"/></svg>
+              <svg viewBox="0 0 24 11"><rect x="0.5" y="0.5" width="20" height="10" rx="2.5" stroke="currentColor" fill="none"/><rect x="2" y="2" width="17" height="7" rx="1.5"/><rect x="21" y="3.5" width="2" height="4" rx="1"/></svg>
+            </span>
+          </div>
+
+          <div class="camera-view">
+            <div class="camera-top">
+              <div class="logo" title="AI Barcode Scanner">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="6" width="18" height="12" rx="3"/>
+                  <path d="M7 9v6M10 9v6M13 9v6M17 9v6"/>
+                </svg>
+                <span>Scanly</span>
+              </div>
+              <button class="icon-btn" title="Flash">
+                <svg><use href="#i-flash"/></svg>
+              </button>
+            </div>
+
+            <div class="camera-mask" id="camera-mask">
+              <span class="camera-corners"><span></span><span></span></span>
+              <div class="scan-line"></div>
+              <div class="barcode" id="barcode-view">
+                <svg viewBox="0 0 200 70">
+                  <g fill="white">
+                    <rect x="6"  y="0" width="2" height="60"/>
+                    <rect x="12" y="0" width="3" height="60"/>
+                    <rect x="20" y="0" width="1" height="60"/>
+                    <rect x="24" y="0" width="4" height="60"/>
+                    <rect x="32" y="0" width="2" height="60"/>
+                    <rect x="38" y="0" width="3" height="60"/>
+                    <rect x="46" y="0" width="2" height="60"/>
+                    <rect x="52" y="0" width="1" height="60"/>
+                    <rect x="56" y="0" width="3" height="60"/>
+                    <rect x="64" y="0" width="2" height="60"/>
+                    <rect x="70" y="0" width="4" height="60"/>
+                    <rect x="78" y="0" width="2" height="60"/>
+                    <rect x="84" y="0" width="3" height="60"/>
+                    <rect x="92" y="0" width="1" height="60"/>
+                    <rect x="96" y="0" width="2" height="60"/>
+                    <rect x="102" y="0" width="3" height="60"/>
+                    <rect x="110" y="0" width="2" height="60"/>
+                    <rect x="116" y="0" width="4" height="60"/>
+                    <rect x="124" y="0" width="2" height="60"/>
+                    <rect x="130" y="0" width="3" height="60"/>
+                    <rect x="138" y="0" width="1" height="60"/>
+                    <rect x="142" y="0" width="2" height="60"/>
+                    <rect x="148" y="0" width="3" height="60"/>
+                    <rect x="156" y="0" width="2" height="60"/>
+                    <rect x="162" y="0" width="3" height="60"/>
+                    <rect x="170" y="0" width="2" height="60"/>
+                    <rect x="176" y="0" width="4" height="60"/>
+                    <rect x="184" y="0" width="2" height="60"/>
+                    <rect x="190" y="0" width="3" height="60"/>
+                    <text x="100" y="70" text-anchor="middle" font-size="8" fill="white" font-family="ui-monospace, monospace">3017620422003</text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+
+            <div class="camera-hint" id="camera-hint">
+              Point your camera at a barcode
+              <div class="sub">Recognised in &lt; 1 second</div>
+            </div>
+          </div>
+
+          <!-- Empty state with history (idle, returning user) — v1 only -->
+          <div class="empty-state hidden v1-only" id="camera-empty">
+            <div class="es-grip"></div>
+            <div class="es-row">
+              <div class="es-title">Recent scans</div>
+              <button class="es-link">Full history ›</button>
+            </div>
+            <div class="es-history">
+              <button class="es-item" onclick="quickOpen('bad')">
+                <div class="es-photo" data-tone="amber">N</div>
+                <div class="es-meta">
+                  <div class="es-name">Nutella</div>
+                  <div class="es-sub">Ferrero · Yesterday</div>
+                </div>
+                <div class="ns-mini ns-e">E</div>
+              </button>
+              <button class="es-item" onclick="quickOpen('good')">
+                <div class="es-photo" data-tone="green">H</div>
+                <div class="es-meta">
+                  <div class="es-name">Hazelnut Butter</div>
+                  <div class="es-sub">Whole Earth · Apr 24</div>
+                </div>
+                <div class="ns-mini ns-a">A</div>
+              </button>
+              <button class="es-item" onclick="quickOpen('na')">
+                <div class="es-photo" data-tone="cream">L</div>
+                <div class="es-meta">
+                  <div class="es-name">Altai Honey</div>
+                  <div class="es-sub">Local farm · Apr 22</div>
+                </div>
+                <div class="ns-mini ns-na">—</div>
+              </button>
+            </div>
+            <div class="es-tip">
+              <span class="es-tip-ico"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6 12 H10 M7 14 H9 M5 9 a4 4 0 1 1 6 0 c-.7.7-1 1.4-1 2.3 H6 c0-.9-.3-1.6-1-2.3 Z"/></svg></span>
+              <span><b>Tip ·</b> Hold the barcode in the frame for 1–2 seconds. Previously scanned products work offline.</span>
+            </div>
+          </div>
+
+          <!-- Empty state clean (first-launch / no history) — v1 only -->
+          <div class="empty-state empty-state-clean v1-only" id="camera-empty-clean">
+            <div class="es-grip"></div>
+            <div class="esc-illustration">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="6.5" width="18" height="11" rx="2"/>
+                <path d="M7 9v7M10 9v7M13 9v7M16 9v7M19 9v7" />
+              </svg>
+            </div>
+            <div class="esc-title">Ready for your first scan</div>
+            <div class="esc-sub">Point your camera at a barcode — food, cosmetics, supplements, or pet food.</div>
+          </div>
+
+          <!-- Mini cards carousel — v1 only -->
+          <div class="mini-carousel v1-only" id="mini-carousel">
+            <div class="mini-dots" id="mini-dots"></div>
+            <div class="mini-track" id="mini-track"></div>
+          </div>
+
+          <!-- v2 — half-screen scan sheet, expands on grip-tap -->
+          <div class="cam-sheet v2-only" id="cam-sheet">
+            <div class="cs-grip-area" id="cs-grip-area" title="Swipe up for full report">
+              <div class="cs-grip"></div>
+            </div>
+            <div class="cs-header">
+              <div class="cs-title">Scan result</div>
+              <button class="cs-close" id="cs-close" aria-label="Close">
+                <svg><use href="#i-close"/></svg>
+              </button>
+            </div>
+            <div class="cs-body" id="cs-body">
+              <!-- Populated by JS on each scan -->
+            </div>
+          </div>
+
+          <!-- v1 tabbar — original 3-tab layout (Chat / Camera / Profile) -->
+          <div class="tab-bar v1-only">
+            <button class="tab" onclick="goTo('chat','b')" title="AI Chat">
+              <svg><use href="#i-chat"/></svg>
+            </button>
+            <button class="tab active center" title="Camera">
+              <svg><use href="#i-camera"/></svg>
+            </button>
+            <button class="tab" onclick="goTo('profile')" title="Profile">
+              <svg><use href="#i-profile"/></svg>
+            </button>
+          </div>
+          <!-- v2 tabbar — Camera / History / Chat / Profile -->
+          <div class="tab-bar v2-only">
+            <button class="tab active" title="Camera">
+              <svg><use href="#i-camera"/></svg>
+            </button>
+            <button class="tab" onclick="goTo('history')" title="History">
+              <svg><use href="#i-history"/></svg>
+            </button>
+            <button class="tab" onclick="goTo('chat','b')" title="AI Chat">
+              <svg><use href="#i-chat"/></svg>
+            </button>
+            <button class="tab" onclick="goTo('profile')" title="Profile">
+              <svg><use href="#i-profile"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <!-- ==== SCREEN 2: Full Report ==== -->
+        <section class="screen" id="screen-report">
+          <div class="sheet">
+            <div class="sheet-handle"></div>
+            <div class="sheet-header">
+              <div class="sheet-title">Report</div>
+              <button class="sheet-close" onclick="goTo('camera')" aria-label="Close">
+                <svg><use href="#i-close"/></svg>
+              </button>
+            </div>
+
+            <div class="sheet-body" id="sheet-body">
+              <!-- Populated by syncReport() — same renderer as the cam-sheet -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ==== SCREEN 3: Profile ==== -->
+        <section class="screen" id="screen-profile">
+          <div class="status-bar light">
+            <span>9:41</span>
+            <span class="icons">
+              <svg viewBox="0 0 16 11"><path d="M1 7.5C3 5.5 5 4.5 8 4.5s5 1 7 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="8" cy="9" r="1.2"/></svg>
+              <svg viewBox="0 0 24 11"><rect x="0.5" y="0.5" width="20" height="10" rx="2.5" stroke="currentColor" fill="none"/><rect x="2" y="2" width="17" height="7" rx="1.5"/><rect x="21" y="3.5" width="2" height="4" rx="1"/></svg>
+            </span>
+          </div>
+
+          <div class="screen-inner">
+            <div class="profile-header">
+              <div class="avatar">YK</div>
+              <div class="info">
+                <div class="name">Yuri K.</div>
+                <div class="email">agaewski10@gmail.com</div>
+                <span class="badge">Pro</span>
+              </div>
+            </div>
+
+            <div class="empty-banner hidden" id="empty-profile-banner">
+              <span class="ico"><svg><use href="#i-lock"/></svg></span>
+              <div class="body"><b>Set up your profile</b><br>Get alerts and AI answers matched to your allergies, diet, and goals.</div>
+              <button onclick="document.getElementById('empty-profile-banner').classList.add('hidden')">Start</button>
+            </div>
+
+            <div class="profile-body">
+
+              <!-- Allergies -->
+              <div class="pf-section">
+                <div class="title">
+                  <span class="name">Allergies</span><span class="count" data-count-of="allergies">2</span>
+                  <button class="pf-edit v2-only" type="button" data-edit-section="allergies" aria-label="Edit allergies">Edit</button>
+                  <span class="lead">Flagged on every scan, no exceptions.</span>
+                </div>
+                <div class="pf-card">
+                  <div class="chip-grid" data-section="allergies">
+                    <button class="pchip crit" data-on>Peanuts</button>
+                    <button class="pchip">Tree nuts</button>
+                    <button class="pchip">Milk / lactose</button>
+                    <button class="pchip">Eggs</button>
+                    <button class="pchip crit" data-on>Wheat / gluten</button>
+                    <button class="pchip">Soy</button>
+                    <button class="pchip">Fish</button>
+                    <button class="pchip">Shellfish</button>
+                    <button class="pchip">Sesame</button>
+                    <button class="pchip">Celery</button>
+                    <button class="pchip">Mustard</button>
+                    <button class="pchip">Sulfites</button>
+                    <button class="pchip">Lupin</button>
+                    <button class="pchip">Mollusks</button>
+                    <button class="pchip">Corn</button>
+                    <button class="pchip">Strawberries</button>
+                    <button class="pchip">Citrus</button>
+                    <button class="pchip">Tomatoes</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Situation -->
+              <div class="pf-section">
+                <div class="title">
+                  <span class="name">Situation</span><span class="count" data-count-of="situation">1</span>
+                  <button class="pf-edit v2-only" type="button" data-edit-section="situation" aria-label="Edit situation">Edit</button>
+                  <span class="lead">Pregnancy, breastfeeding, or young children.</span>
+                </div>
+                <div class="pf-card">
+                  <div class="chip-grid" data-section="situation">
+                    <button class="pchip warn">Pregnancy</button>
+                    <button class="pchip warn">Breastfeeding</button>
+                    <button class="pchip warn" data-on>Parent · child 0–3</button>
+                    <button class="pchip">Parent · child 4–12</button>
+                    <button class="pchip">Senior 65+</button>
+                    <button class="pchip">Athlete in training</button>
+                    <button class="pchip">Recovering from illness</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Diet -->
+              <div class="pf-section">
+                <div class="title">
+                  <span class="name">Diet</span><span class="count" data-count-of="diet">1</span>
+                  <button class="pf-edit v2-only" type="button" data-edit-section="diet" aria-label="Edit diet">Edit</button>
+                  <span class="lead">Preferences we apply to every verdict.</span>
+                </div>
+                <div class="pf-card">
+                  <div class="chip-grid" data-section="diet">
+                    <button class="pchip">Vegan</button>
+                    <button class="pchip">Vegetarian</button>
+                    <button class="pchip">Pescatarian</button>
+                    <button class="pchip">Gluten-free</button>
+                    <button class="pchip">Dairy-free</button>
+                    <button class="pchip" data-on>Keto / low-carb</button>
+                    <button class="pchip">Paleo</button>
+                    <button class="pchip">Mediterranean</button>
+                    <button class="pchip">Halal</button>
+                    <button class="pchip">Kosher</button>
+                    <button class="pchip">Low-FODMAP</button>
+                    <button class="pchip">Whole30</button>
+                    <button class="pchip">Low-sodium</button>
+                    <button class="pchip">Sugar-free</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Goals -->
+              <div class="pf-section">
+                <div class="title">
+                  <span class="name">Health goals</span><span class="count" data-count-of="goals">2</span>
+                  <button class="pf-edit v2-only" type="button" data-edit-section="goals" aria-label="Edit goals">Edit</button>
+                  <span class="lead">What we prioritise in advice.</span>
+                </div>
+                <div class="pf-card">
+                  <div class="chip-grid" data-section="goals">
+                    <button class="pchip" data-on>Lose weight</button>
+                    <button class="pchip">Gain muscle</button>
+                    <button class="pchip">Heart health</button>
+                    <button class="pchip" data-on>Lower sugar</button>
+                    <button class="pchip">Lower cholesterol</button>
+                    <button class="pchip">Brain health</button>
+                    <button class="pchip">Gut health</button>
+                    <button class="pchip">Clean eating</button>
+                    <button class="pchip">More protein</button>
+                    <button class="pchip">More fiber</button>
+                    <button class="pchip">Lower sodium</button>
+                    <button class="pchip">Better sleep</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Region -->
+              <div class="pf-section">
+                <div class="title">
+                  <span class="name">Region</span>
+                  <span class="lead">Used for local rules and availability.</span>
+                </div>
+                <div class="pf-card row-list">
+                  <div class="row">
+                    <span class="lbl"><span class="ico flag" aria-hidden="true"></span>United States</span>
+                    <span class="val">Change <svg><use href="#i-chev-r"/></svg></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- About — v1 only; removed from v2 per PM decision -->
+              <div class="pf-section v1-only">
+                <div class="title">
+                  <span class="name">About you</span><span class="small-muted">for AI chat</span>
+                  <span class="lead">Anything else we should know.</span>
+                </div>
+                <div class="pf-card">
+                  <textarea class="about-text" placeholder="Describe your goals or situation — added as context to AI chat.">Want to lose 8 kg by summer, train 3×/week, have a 2-year-old at home.</textarea>
+                </div>
+              </div>
+
+              <!-- Service -->
+              <div class="pf-section">
+                <div class="title">
+                  <span class="name">Account</span>
+                  <span class="lead">Subscription, legal, and sign-out.</span>
+                </div>
+                <div class="pf-card row-list">
+                  <div class="row"><span class="lbl"><span class="ico"><svg><use href="#i-bell"/></svg></span>Notifications</span><span class="val"><svg><use href="#i-chev-r"/></svg></span></div>
+                  <div class="row"><span class="lbl"><span class="ico"><svg><use href="#i-star"/></svg></span>Subscription management</span><span class="val"><svg><use href="#i-chev-r"/></svg></span></div>
+                  <div class="row"><span class="lbl"><span class="ico"><svg><use href="#i-chat"/></svg></span>Contact us</span><span class="val"><svg><use href="#i-chev-r"/></svg></span></div>
+                  <div class="row"><span class="lbl"><span class="ico"><svg><use href="#i-info"/></svg></span>Terms of Use</span><span class="val"><svg><use href="#i-chev-r"/></svg></span></div>
+                  <div class="row"><span class="lbl"><span class="ico"><svg><use href="#i-lock"/></svg></span>Privacy Policy</span><span class="val"><svg><use href="#i-chev-r"/></svg></span></div>
+                  <div class="row"><span class="lbl" style="color:var(--alert-critical)"><span class="ico" style="color:var(--alert-critical)"><svg><use href="#i-logout"/></svg></span>Sign out</span><span class="val"></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- v1 tabbar — Chat / Camera / Profile -->
+          <div class="tab-bar v1-only">
+            <button class="tab" onclick="goTo('chat','b')" title="AI Chat">
+              <svg><use href="#i-chat"/></svg>
+            </button>
+            <button class="tab center" onclick="goTo('camera')" title="Camera">
+              <svg><use href="#i-camera"/></svg>
+            </button>
+            <button class="tab active" title="Profile">
+              <svg><use href="#i-profile"/></svg>
+            </button>
+          </div>
+          <!-- v2 tabbar — Camera / History / Chat / Profile -->
+          <div class="tab-bar v2-only">
+            <button class="tab" onclick="goTo('camera')" title="Camera">
+              <svg><use href="#i-camera"/></svg>
+            </button>
+            <button class="tab" onclick="goTo('history')" title="History">
+              <svg><use href="#i-history"/></svg>
+            </button>
+            <button class="tab" onclick="goTo('chat','b')" title="AI Chat">
+              <svg><use href="#i-chat"/></svg>
+            </button>
+            <button class="tab active" title="Profile">
+              <svg><use href="#i-profile"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <!-- ==== Profile edit sheet (v2 only) — full list picker for any chip section ==== -->
+        <section class="screen v2-only" id="screen-profile-edit">
+          <div class="sheet">
+            <div class="sheet-handle"></div>
+            <div class="sheet-header">
+              <div class="sheet-title" id="pe-title">SECTION</div>
+              <button class="sheet-close" onclick="closeProfileEdit()" aria-label="Done">
+                <svg><use href="#i-close"/></svg>
+              </button>
+            </div>
+            <div class="sheet-body" id="pe-body"></div>
+          </div>
+        </section>
+
+        <!-- ==== SCREEN 5: History (v2 only) ==== -->
+        <section class="screen v2-only" id="screen-history">
+          <div class="status-bar light">
+            <span>9:41</span>
+            <span class="icons">
+              <svg viewBox="0 0 16 11"><path d="M1 7.5C3 5.5 5 4.5 8 4.5s5 1 7 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="8" cy="9" r="1.2"/></svg>
+              <svg viewBox="0 0 24 11"><rect x="0.5" y="0.5" width="20" height="10" rx="2.5" stroke="currentColor" fill="none"/><rect x="2" y="2" width="17" height="7" rx="1.5"/><rect x="21" y="3.5" width="2" height="4" rx="1"/></svg>
+            </span>
+          </div>
+
+          <div class="screen-inner">
+            <div class="history-header">
+              <div class="title">History</div>
+              <div class="sub" id="history-count">0 scans</div>
+            </div>
+
+            <div class="history-body">
+              <div class="history-list" id="history-list"></div>
+              <div class="history-empty" id="history-empty">
+                <div class="ico"><svg><use href="#i-history"/></svg></div>
+                <h3>No scans yet</h3>
+                <p>Scan a barcode and your scans will appear here.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-bar">
+            <button class="tab" onclick="goTo('camera')" title="Camera">
+              <svg><use href="#i-camera"/></svg>
+            </button>
+            <button class="tab active" title="History">
+              <svg><use href="#i-history"/></svg>
+            </button>
+            <button class="tab" onclick="goTo('chat','b')" title="AI Chat">
+              <svg><use href="#i-chat"/></svg>
+            </button>
+            <button class="tab" onclick="goTo('profile')" title="Profile">
+              <svg><use href="#i-profile"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <!-- ==== SCREEN 4: AI Chat ==== -->
+        <section class="screen" id="screen-chat">
+          <div class="status-bar light">
+            <span>9:41</span>
+            <span class="icons">
+              <svg viewBox="0 0 16 11"><path d="M1 7.5C3 5.5 5 4.5 8 4.5s5 1 7 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="8" cy="9" r="1.2"/></svg>
+              <svg viewBox="0 0 24 11"><rect x="0.5" y="0.5" width="20" height="10" rx="2.5" stroke="currentColor" fill="none"/><rect x="2" y="2" width="17" height="7" rx="1.5"/><rect x="21" y="3.5" width="2" height="4" rx="1"/></svg>
+            </span>
+          </div>
+
+          <div class="screen-inner">
+            <div class="chat-header">
+              <button class="chat-back" onclick="goTo('camera')" aria-label="Back">
+                <svg><use href="#i-arrow-l"/></svg>
+              </button>
+              <div class="chat-title">
+                <div class="name" id="chat-title-name">Nutella</div>
+                <div class="sub" id="chat-title-sub">AI · about this product</div>
+              </div>
+              <button class="chat-history-btn v2-only" onclick="goTo('chat-history')" aria-label="Past chats" title="Past chats">
+                <svg><use href="#i-history"/></svg>
+              </button>
+              <div class="v1-only" style="width:40px;flex-shrink:0;"></div>
+            </div>
+
+            <div class="pinned-card" id="pinned-card" onclick="goTo('report')">
+              <div class="photo" id="pin-photo" data-tone="amber">N</div>
+              <div class="info">
+                <div class="name" id="pin-name">Nutella</div>
+                <div class="brand" id="pin-brand">Ferrero · 350 g</div>
+              </div>
+              <div class="ns-mini ns-e" id="pin-ns">E</div>
+            </div>
+
+            <div class="chat-body" id="chat-body">
+              <div class="welcome" id="chat-welcome">
+                <div class="icon" id="welcome-icon"><svg><use href="#i-sparkle"/></svg></div>
+                <h3 id="welcome-title">Ask anything about this product</h3>
+                <p id="welcome-sub">Answers are shaped by your allergies, diet, and goals.</p>
+              </div>
+
+              <div class="suggestion-chips" id="suggestion-chips">
+                <!-- chips dynamically rendered -->
+              </div>
+            </div>
+
+            <div class="chat-input">
+              <input class="field" id="chat-input" placeholder="Ask anything…" />
+              <button class="send" id="chat-send" aria-label="Send">
+                <svg><use href="#i-send"/></svg>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==== SCREEN: Past chats (v2 only) ==== -->
+        <section class="screen v2-only" id="screen-chat-history">
+          <div class="status-bar light">
+            <span>9:41</span>
+            <span class="icons">
+              <svg viewBox="0 0 16 11"><path d="M1 7.5C3 5.5 5 4.5 8 4.5s5 1 7 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="8" cy="9" r="1.2"/></svg>
+              <svg viewBox="0 0 24 11"><rect x="0.5" y="0.5" width="20" height="10" rx="2.5" stroke="currentColor" fill="none"/><rect x="2" y="2" width="17" height="7" rx="1.5"/><rect x="21" y="3.5" width="2" height="4" rx="1"/></svg>
+            </span>
+          </div>
+
+          <div class="screen-inner">
+            <div class="ch-header">
+              <button class="chat-back" onclick="goTo('chat')" aria-label="Back to chat">
+                <svg><use href="#i-arrow-l"/></svg>
+              </button>
+              <div class="title">Past chats</div>
+              <div class="spacer"></div>
+            </div>
+
+            <div class="ch-body">
+              <div class="ch-meta" id="ch-meta">0 chats</div>
+              <div class="ch-list" id="ch-list"></div>
+              <div class="ch-empty" id="ch-empty" style="display:none;">
+                <div class="ico"><svg><use href="#i-chat"/></svg></div>
+                <h3>No chats yet</h3>
+                <p>Ask the AI about a product and your chats will appear here.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- toast -->
+        <div class="toast" id="toast">Done</div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Right panel: state inspector -->
+  <aside class="panel-r">
+    <div class="panel">
+      <h3>State</h3>
+      <div id="state-info" class="small-muted" style="line-height: 1.7; font-size: 11px; color: var(--t-secondary); text-transform: none; letter-spacing: 0;">
+        <span style="font-family: 'Geist Mono', monospace; text-transform: uppercase; letter-spacing: .08em;">Screen</span> · <b id="info-screen" style="color:var(--t-primary); font-family: 'Geist Mono', monospace; letter-spacing: .04em; text-transform: uppercase;">camera</b><br>
+        <span style="font-family: 'Geist Mono', monospace; text-transform: uppercase; letter-spacing: .08em;">Scan</span> · <b id="info-scan" style="color:var(--t-primary); font-family: 'Geist Mono', monospace; letter-spacing: .04em; text-transform: uppercase;">—</b><br>
+        <span style="font-family: 'Geist Mono', monospace; text-transform: uppercase; letter-spacing: .08em;">Mode</span> · <b id="info-mode" style="color:var(--t-primary); font-family: 'Geist Mono', monospace; letter-spacing: .04em; text-transform: uppercase;">—</b>
+      </div>
+    </div>
+
+    <div class="panel v1-only">
+      <h3>What to test</h3>
+      <ul>
+        <li>«Scan bad» → see allergen alert in mini-card</li>
+        <li>Open «Full report», expand the breakdown rows</li>
+        <li>Tap a question chip → lands in AI chat with context</li>
+        <li>Toggle Mode A ↔ B → product context disappears</li>
+        <li>In Profile, tap chips → section counters update</li>
+        <li>«No score» → shows «Insufficient data» placeholder</li>
+      </ul>
+    </div>
+
+    <div class="panel v1-only">
+      <h3>Principles</h3>
+      <ul>
+        <li>Alerts outweigh score visually</li>
+        <li>Scan &lt; 1 sec, no loaders</li>
+        <li>Swipe sheet down → back to camera</li>
+        <li>Profile is optional → CTA if empty</li>
+      </ul>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+/* =========================================================
+   PROTOTYPE STATE & WIRING
+========================================================= */
+const PRODUCTS = {
+  // OFF barcode 3017624010701 — fetched 2026-04-28
+  bad: {
+    name: 'Nutella',
+    brand: 'Ferrero · 400 g',
+    producer: 'Ferrero Group',
+    monogram: 'N',
+    tone: 'amber',
+    imgSrc: 'https://images.openfoodfacts.org/images/products/301/762/401/0701/front_en.54.400.jpg',
+    ns: 'E',
+    verdict: 'Avoid',
+    sub: 'High sugar and saturated fat.',
+    alertGlyph: 'g-allergen',
+    alertTitle: 'Allergen detected · tree nuts',
+    alertDesc: 'Tree nuts are on your allergy list.',
+    alertClass: 'danger',
+    aiPreview: 'Skip it. The hazelnut allergen alone is a hard no for you — but I can suggest a swap that fits your weight goal.',
+    alerts: [
+      {
+        ingredient: 'Hazelnuts',
+        severity: 'danger',
+        glyph: 'g-allergen',
+        summary: 'Matches your tree-nut allergy.',
+        tags: ['Tree-nut allergy'],
+      },
+      {
+        ingredient: 'Sugar',
+        severity: 'danger',
+        glyph: 'g-goal',
+        summary: '56.3g per 100g — well above the WHO limit of 25g per day.',
+        tags: ['Weight loss goal', 'Diabetes risk', 'Heart health'],
+      },
+      {
+        ingredient: 'Palm oil',
+        severity: 'warn',
+        glyph: 'g-warn',
+        summary: 'Primary fat source — 10.6g saturated fat per 100g.',
+        tags: ['Saturated fat', 'Weight loss goal'],
+      },
+      {
+        ingredient: 'Emulsifier',
+        severity: 'info',
+        glyph: 'g-child',
+        summary: 'Flagged in toddler feeding guidelines.',
+        tags: ['Children 0–3', 'Ultra-processed'],
+      },
+    ],
+    nutriments: { sugars_100g: 56.3, 'saturated-fat_100g': 10.6, salt_100g: 0.1075, fiber_100g: null },
+    nova_group: null,
+    additives_tags: [],
+    ingredients_text_en: 'sugar, palm oil, hazelnuts, skimmed milk powder, fat reduced cocoa, emulsifier, vanillin.',
+    allergens_tags: ['en:nuts'],
+    traces_tags: ['en:milk', 'en:nuts', 'en:soybeans'],
+  },
+  // OFF barcode 0894700010137 — fetched 2026-04-28
+  good: {
+    name: 'Greek Yogurt Nonfat Plain',
+    brand: 'Chobani',
+    producer: 'Chobani',
+    monogram: 'C',
+    tone: 'green',
+    ns: 'A',
+    verdict: 'Excellent',
+    sub: 'Minimally processed, high protein, no additives.',
+    alertGlyph: 'g-ok',
+    alertTitle: 'Clear for your profile',
+    alertDesc: 'Nothing flagged for your profile.',
+    alertClass: 'success',
+    aiPreview: 'Solid pick. High protein, clean ingredients, NOVA 1 — fits your weight goal.',
+    alerts: [
+      {
+        ingredient: 'No matches',
+        severity: 'success',
+        glyph: 'g-ok',
+        summary: 'No added sugar, no additives, NOVA 1 — clears every flag in your profile.',
+        tags: ['Weight loss goal', 'Heart health'],
+      },
+    ],
+    nutriments: { sugars_100g: 6, 'saturated-fat_100g': 0, salt_100g: 0.1625, fiber_100g: 0, proteins_100g: 16 },
+    nova_group: 1,
+    additives_tags: [],
+    ingredients_text_en: 'cultured nonfat milk, S. Thermophilus, L. Bulgaricus, L. Acidophilus, Bifidus, L. Casei, L. Rhamnosus',
+    allergens_tags: ['en:milk'],
+    traces_tags: [],
+  },
+  // Not in Open Food Facts — all nutriment fields null (demonstrates no-data state)
+  na: {
+    name: 'Mountain Apiary Raw Wildflower Honey Jar',
+    brand: 'Mountain Apiary · 500 g',
+    producer: 'Local Farm Co.',
+    monogram: 'L',
+    tone: 'cream',
+    ns: 'NA',
+    verdict: 'Insufficient data',
+    sub: 'Not found in our database.',
+    alertGlyph: 'g-warn',
+    alertTitle: 'Score unavailable',
+    alertDesc: 'Your alerts were checked against the label.',
+    alertClass: 'warn',
+    aiPreview: 'Not in our database — ask me about the ingredients or your goals.',
+    alerts: [
+      {
+        ingredient: 'Honey',
+        severity: 'warn',
+        glyph: 'g-goal',
+        summary: '~80 g sugar per 100 g — natural fructose, but high against your weight goal.',
+        tags: ['Weight loss goal', 'Diabetes risk'],
+      },
+      {
+        ingredient: 'Raw honey',
+        severity: 'info',
+        glyph: 'g-child',
+        summary: 'Unsuitable for infants under 12 months — botulism risk.',
+        tags: ['Children 0–1'],
+      },
+    ],
+    nutriments: null,
+    nova_group: null,
+    additives_tags: null,
+    ingredients_text_en: 'raw wildflower honey.',
+    allergens_tags: [],
+    traces_tags: [],
+  }
+};
+
+let state = {
+  version: '1',
+  screen: 'camera',
+  scan: null,
+  chatMode: 'a',
+  chatStarted: false,
+  product: PRODUCTS.bad,
+  emptyMode: 'clean',
+  history: [],
+};
+
+/* ====== Version (v1 / v2) ====== */
+function setVersion(v) {
+  state.version = v;
+  document.body.setAttribute('data-version', v);
+  document.querySelectorAll('#version-toggle button').forEach(b => {
+    b.classList.toggle('active', b.dataset.ver === v);
+  });
+  const subtitle = document.getElementById('stage-subtitle');
+  if (subtitle) {
+    subtitle.textContent = v === '2'
+      ? '5 screens · Camera · Report · Profile · AI Chat · History'
+      : '4 screens · Camera · Full Report · Profile · AI Chat';
+  }
+  // Reset state to a sane default for the chosen version
+  hideCamSheet();
+  clearCards();
+  if (v === '2') {
+    hideEmpty();
+    if (state.screen === 'camera') {
+      document.getElementById('camera-mask').classList.remove('scanned');
+      document.getElementById('camera-hint').style.opacity = 1;
+    }
+  } else {
+    if (state.screen === 'history' || state.screen === 'chat-history' || state.screen === 'profile-edit') goTo('camera');
+    showEmpty(state.emptyMode);
+  }
+  renderHistory();
+}
+document.querySelectorAll('#version-toggle button').forEach(b => {
+  b.addEventListener('click', () => setVersion(b.dataset.ver));
+});
+
+/* ====== Screen routing ====== */
+function goTo(screen, mode, prefilled) {
+  if (screen === 'history' && state.version !== '2') return;
+  if (screen === 'chat-history' && state.version !== '2') return;
+  if (screen === 'profile-edit' && state.version !== '2') return;
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('screen-' + screen);
+  if (!el) return;
+  el.classList.add('active');
+  state.screen = screen;
+  // Leaving camera — hide the v2 sheet so it doesn't peek through
+  if (screen !== 'camera') hideCamSheet();
+  if (screen === 'history') renderHistory();
+  if (screen === 'chat-history') renderChatHistory();
+  if (screen === 'chat' && mode) setChatMode(mode);
+  if (screen === 'chat' && prefilled) {
+    setTimeout(() => sendMessage(prefilled), 200);
+  } else if (screen === 'chat') {
+    if (!state.chatStarted) renderWelcome();
+  }
+  document.querySelectorAll('#screen-nav .pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.go === screen);
+  });
+  document.querySelectorAll('#screen-nav-v2 .st-screen').forEach(p => {
+    p.classList.toggle('active', p.dataset.go === screen);
+  });
+  document.body.setAttribute('data-screen', screen);
+  document.getElementById('info-screen').textContent = screen;
+  document.getElementById('info-mode').textContent = (screen === 'chat' ? state.chatMode.toUpperCase() : '—');
+}
+
+document.querySelectorAll('#screen-nav .pill').forEach(p => {
+  p.addEventListener('click', () => goTo(p.dataset.go));
+});
+
+/* ====== Camera scan simulation ====== */
+function showEmpty(mode) {
+  state.emptyMode = mode;
+  const withHistory = document.getElementById('camera-empty');
+  const clean = document.getElementById('camera-empty-clean');
+  withHistory.classList.toggle('hidden', mode !== 'history');
+  clean.classList.toggle('hidden', mode !== 'clean');
+}
+function hideEmpty() {
+  document.getElementById('camera-empty').classList.add('hidden');
+  document.getElementById('camera-empty-clean').classList.add('hidden');
+}
+
+function makeMiniCard(kind) {
+  const p = PRODUCTS[kind];
+  const card = document.createElement('div');
+  card.className = 'mini-card';
+  card.dataset.kind = kind;
+  const nsClass = p.ns === 'NA' ? 'ns-na' : 'ns-' + p.ns.toLowerCase();
+  const nsText = p.ns === 'NA' ? '—' : p.ns;
+  card.innerHTML = `
+    <div class="mc-header">
+      <div class="mc-photo" data-tone="${p.tone}">${p.monogram}</div>
+      <div class="mc-meta">
+        <div class="name">${p.name}</div>
+        <div class="brand">${p.brand}</div>
+      </div>
+      <div class="mc-score-chip ${nsClass}" title="Nutri-Score ${p.ns === 'NA' ? 'unavailable' : p.ns}">${nsText}</div>
+    </div>
+    <div class="mc-alert-hero ${p.alertClass}">
+      <div class="mc-alert-badge"><svg><use href="#${p.alertGlyph}"/></svg></div>
+      <div class="mc-alert-body">
+        <div class="mc-alert-eyebrow">
+          <span class="verdict-word">${p.verdict}</span>
+        </div>
+        <div class="mc-alert-title">${p.alertTitle}</div>
+        <div class="mc-alert-desc">${p.alertDesc}</div>
+      </div>
+    </div>
+    <button class="mc-cta" onclick="goTo('report')">
+      View full report
+      <svg width="16" height="16"><use href="#i-chev-r"/></svg>
+    </button>
+  `;
+  return card;
+}
+
+function appendScan(kind) {
+  const p = PRODUCTS[kind];
+  state.scan = kind;
+  state.product = p;
+  syncReport(p);
+  syncPinned(p);
+  document.getElementById('info-scan').textContent = p.name + ' (' + p.ns + ')';
+  // Always log to history (used by v2 History tab)
+  pushHistory(kind);
+
+  if (state.version === '2') {
+    // v2 — single product replaces previous; show half-sheet
+    clearCards();
+    showCamSheet(p);
+  } else {
+    // v1 — append to carousel
+    const track = document.getElementById('mini-track');
+    const card = makeMiniCard(kind);
+    track.appendChild(card);
+    updateDots();
+    requestAnimationFrame(() => {
+      card.classList.add('visible');
+      setTimeout(() => {
+        card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }, 60);
+    });
+  }
+}
+
+/* ====== History (v2) ====== */
+function pushHistory(kind) {
+  const p = PRODUCTS[kind];
+  const now = new Date();
+  state.history.unshift({
+    kind,
+    name: p.name,
+    brand: p.brand,
+    monogram: p.monogram,
+    tone: p.tone,
+    ns: p.ns,
+    verdict: p.verdict,
+    when: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  });
+  if (state.history.length > 50) state.history.length = 50;
+  renderHistory();
+}
+
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  const empty = document.getElementById('history-empty');
+  const count = document.getElementById('history-count');
+  if (!list) return;
+  list.innerHTML = '';
+  if (state.history.length === 0) {
+    empty.style.display = '';
+    count.textContent = '0 scans';
+    return;
+  }
+  empty.style.display = 'none';
+  count.textContent = state.history.length + (state.history.length === 1 ? ' scan' : ' scans');
+  state.history.forEach((item, idx) => {
+    const nsClass = item.ns === 'NA' ? 'ns-na' : 'ns-' + item.ns.toLowerCase();
+    const scoreClass = item.ns === 'NA' ? 'score-na' : 'score-' + item.ns.toLowerCase();
+    const nsText = item.ns === 'NA' ? '—' : item.ns;
+    const btn = document.createElement('button');
+    btn.className = 'h-item ' + scoreClass;
+    btn.innerHTML = `
+      <div class="photo" data-tone="${item.tone}">${item.monogram}</div>
+      <div class="info">
+        <div class="name">${item.name}</div>
+        <div class="verdict-line">
+          <div class="v-badge ${nsClass}">${nsText}</div>
+          <span class="v-word">${item.verdict}</span>
+        </div>
+        <div class="h-date">${item.when} · ${item.brand}</div>
+      </div>
+      <span class="h-chev"><svg><use href="#i-chev-r"/></svg></span>
+    `;
+    btn.addEventListener('click', () => quickOpen(item.kind));
+    list.appendChild(btn);
+  });
+}
+
+/* ====== Unified report renderer ====== */
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+function renderAlertsHtml(alerts) {
+  if (!alerts || !alerts.length) return '';
+  return alerts.map(a => {
+    const tagsHtml = (a.tags && a.tags.length)
+      ? `<div class="alert-tags">${a.tags.map(t => `<span class="alert-tag">${escapeHtml(t)}</span>`).join('')}</div>`
+      : '';
+    return `
+      <div class="alert-item ${a.severity}">
+        <span class="ico"><svg><use href="#${a.glyph}"/></svg></span>
+        <div class="body">
+          <div class="title">${escapeHtml(a.ingredient)}</div>
+          <div class="desc">${escapeHtml(a.summary)}</div>
+          ${tagsHtml}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* Universal AI prompt for MVP — no personalisation claim, sets expectation
+   for what the assistant can actually answer about the product. */
+const AI_UNIVERSAL_PROMPT = 'Ask about the ingredients, the Nutri-Score, allergens, or how this compares to alternatives.';
+
+/* Three product-aware suggestions, written without personal-stake claims */
+function suggestionsFor(p) {
+  if (p === PRODUCTS.good) {
+    return [
+      'Why is this scored so well?',
+      "What's in the ingredients?",
+      'Find similar products',
+    ];
+  }
+  if (p === PRODUCTS.na) {
+    return [
+      'Why is the score missing?',
+      'Walk me through the ingredients',
+      'Is this product safe?',
+    ];
+  }
+  return [
+    'What can I replace it with?',
+    'Why is this scored so low?',
+    "What's in the ingredients?",
+  ];
+}
+
+/* ====== Breakdown helpers (thresholds: EU traffic-light + WHO) ====== */
+function nutriLevel(val, lo, hi) {
+  if (val == null) return null;
+  return val < lo ? 'low' : val < hi ? 'med' : 'high';
+}
+const LEVEL_LABEL = { low: 'Low', med: 'Med', high: 'High' };
+
+function breakdownRow(label, level, pill, detail) {
+  if (level === null) {
+    return `
+      <div class="accordion-row no-data">
+        <span class="label">${label}</span>
+        <span class="level-pill na">No data</span>
+      </div>`;
+  }
+  return `
+    <div class="accordion-row" onclick="this.classList.toggle('open')">
+      <span class="label">${escapeHtml(label)}</span>
+      <span class="level-pill ${level}">${escapeHtml(pill)}</span>
+      <span class="chev"><svg><use href="#i-chev-d"/></svg></span>
+    </div>
+    <div class="accordion-detail">${escapeHtml(detail)}</div>`;
+}
+
+function buildBreakdown(p) {
+  const n = p.nutriments || {};
+  const sugars = n.sugars_100g ?? null;
+  const satFat = n['saturated-fat_100g'] ?? null;
+  const salt   = n.salt_100g ?? null;
+  const nova   = p.nova_group ?? null;
+  const adds   = p.additives_tags || [];
+
+  const sLvl = nutriLevel(sugars, 5, 22.5);
+  const sDetail = sLvl === 'high' ? `${sugars}g per 100g — well above the WHO limit of 25g per day.`
+    : sLvl === 'med' ? `${sugars}g per 100g — moderate. Stay within 25g total per day.`
+    : `${sugars}g per 100g — within recommended limits.`;
+
+  const novaLvl = nova === null ? null : nova <= 2 ? 'low' : nova === 3 ? 'med' : 'high';
+  const novaDetail = { 1: 'Unprocessed or minimally processed food.',
+    2: 'Culinary ingredient — not consumed alone.',
+    3: 'Processed — contains added salt, sugar or fat.',
+    4: 'Ultra-processed — contains additives, emulsifiers or industrial ingredients.' }[nova] || '';
+
+  const aLvl = adds.length === 0 ? 'low' : adds.length <= 2 ? 'med' : 'high';
+  const aDetail = adds.length === 0 ? 'No additives detected.'
+    : adds.slice(0, 3).map(t => t.replace('en:', '').toUpperCase()).join(', ')
+      + (adds.length > 3 ? ` + ${adds.length - 3} more` : '');
+
+  const sfLvl = nutriLevel(satFat, 1.5, 5);
+  const sfDetail = sfLvl === 'high' ? `${satFat}g per 100g — exceeds the 5g per 100g threshold.`
+    : sfLvl === 'med' ? `${satFat}g per 100g — moderate.`
+    : `${satFat !== null ? satFat + 'g' : '0g'} per 100g — low saturated fat.`;
+
+  const slLvl = nutriLevel(salt, 0.3, 1.5);
+  const slDetail = slLvl === 'high' ? `${salt}g per 100g — high sodium content.`
+    : slLvl === 'med' ? `${salt}g per 100g — moderate.`
+    : `${salt !== null ? salt + 'g' : '0g'} per 100g — within normal range.`;
+
+  return [
+    breakdownRow('Sugar',            sLvl,    sLvl    ? `${LEVEL_LABEL[sLvl]} · ${sugars}g` : 'Low',      sDetail),
+    breakdownRow('Processing (NOVA)', novaLvl, `NOVA ${nova}`,                                             novaDetail),
+    breakdownRow('Additives',         aLvl,    adds.length === 0 ? 'None' : `${adds.length} found`,        aDetail),
+    breakdownRow('Saturated fat',     sfLvl,   sfLvl   ? `${LEVEL_LABEL[sfLvl]} · ${satFat}g` : 'Low',    sfDetail),
+    breakdownRow('Salt',              slLvl,   slLvl   ? `${LEVEL_LABEL[slLvl]} · ${salt}g` : 'Low',      slDetail),
+  ].join('');
+}
+
+function buildIngredients(p) {
+  const text = p.ingredients_text_en || '';
+  if (!text) return '<p style="color:var(--t-tertiary);font-size:14px;padding:4px 0">Ingredient list not available.</p>';
+  const alertIngs = (p.alerts || []).filter(a => a.severity === 'danger').map(a => a.ingredient.toLowerCase());
+  const warnIngs  = (p.alerts || []).filter(a => a.severity === 'warn').map(a => a.ingredient.toLowerCase());
+  const warnWords = ['palm oil', 'hydrogenated', 'high fructose'];
+  const items = text.split(/,(?![^(]*\))/).map(s => s.trim().replace(/\.$/, '').replace(/^_|_$/g, ''));
+  return items.map(ing => {
+    const low = ing.toLowerCase();
+    const isAlert = alertIngs.some(a => low.includes(a));
+    const isWarn  = !isAlert && (warnIngs.some(w => low.includes(w)) || warnWords.some(w => low.includes(w)));
+    return `<span class="ing ${isAlert ? 'alert' : isWarn ? 'warn' : ''}">${escapeHtml(ing)}</span>`;
+  }).join('');
+}
+
+/* ====== Single source of truth for report HTML ======
+   Used by both the full Report screen and the v2 cam-sheet (half-screen mini).
+   The cam-sheet is just the same content rendered in a 56%-height container. */
+function renderReportHTML(p) {
+  const nsClass = p.ns === 'NA' ? 'ns-na' : 'ns-' + p.ns.toLowerCase();
+  const scoreClass = p.ns === 'NA' ? 'score-na' : 'score-' + p.ns.toLowerCase();
+  const nsText = p.ns === 'NA' ? '—' : p.ns;
+  const flagCount = (p.alerts && p.alerts.length) || 0;
+  const flagLabel = flagCount === 1 ? '1 flag' : flagCount + ' flags';
+  const alertsHtml = renderAlertsHtml(p.alerts);
+  const suggestions = suggestionsFor(p).slice(0, 3);
+  const bubblesHtml = suggestions.map(q =>
+    `<button class="ai-bubble" type="button" data-q="${escapeHtml(q)}">${escapeHtml(q)}<span class="ai-bubble-send"><svg width="10" height="10"><use href="#i-up"/></svg></span></button>`
+  ).join('');
+
+  // Masthead — split brand line into eyebrow (manufacturer) and size details
+  const brandParts = (p.brand || '').split(' · ');
+  const brandEyebrow = brandParts[0] || '';
+  const details = brandParts.slice(1).join(' · ');
+  const photoImg = p.imgSrc
+    ? `<img src="${escapeHtml(p.imgSrc)}" alt="${escapeHtml(p.name)}" onerror="this.remove()">`
+    : '';
+  const flagAnnotation = escapeHtml(p.verdict);
+  const brandLineHtml = details
+    ? `<span class="brand-name">${escapeHtml(brandEyebrow)}</span><span class="brand-size">${escapeHtml(details)}</span>`
+    : `<span class="brand-name">${escapeHtml(brandEyebrow)}</span>`;
+
+  // No-score products: skip verdict-mini block — nothing certifiable to show
+  const verdictMiniHtml = p.ns === 'NA' ? '' : `
+        <div class="verdict-mini">
+          <span class="ns">${nsText}</span>
+          <span>${flagAnnotation}</span>
+        </div>`;
+
+  return `
+    <!-- 1. Product hero masthead — photo on the left; title + verdict pill on the right -->
+    <div class="product-hero ${scoreClass}">
+      <div class="photo-col">
+        <div class="photo" data-tone="${p.tone}">${escapeHtml(p.monogram)}${photoImg}</div>
+      </div>
+      <div class="col">
+        <div class="name">${escapeHtml(p.name)}</div>${verdictMiniHtml}
+      </div>
+    </div>
+
+    <!-- 2. Alerts — personal stakes -->
+    <div class="alerts-block">
+      <div class="section-title">
+        <span class="name">For you</span>
+        <span class="lead">Personal alerts based on your profile.</span>
+      </div>
+      ${alertsHtml}
+    </div>
+
+    <!-- 4. Ask the AI — A1 Orb + Headline -->
+    <div class="ai-pitch">
+      <div class="ai-orb">
+        <div class="ai-orb-ring">
+          <svg width="20" height="20"><use href="#i-sparkle"/></svg>
+        </div>
+      </div>
+      <p class="ai-pitch-heading">Ask the AI</p>
+      <p class="ai-pitch-desc">About ingredients, Nutri-Score, allergens, or alternatives.</p>
+      <div class="ai-bubbles">
+        ${bubblesHtml}
+      </div>
+      <div class="ai-input-row" data-ai-input="report">
+        <input type="text" placeholder="Ask anything about this product…" aria-label="Ask the AI" />
+        <button class="send" type="button" aria-label="Send">
+          <svg width="15" height="15"><use href="#i-send"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 5. Breakdown -->
+    <div class="section-title">
+      <span class="name">Breakdown</span>
+      <span class="lead">Sugar, processing, additives, and other risk factors.</span>
+    </div>
+    <div class="card">
+      ${buildBreakdown(p)}
+    </div>
+
+    <!-- 6. Ingredients -->
+    <div class="section-title">
+      <span class="name">Ingredients</span>
+      <span class="lead">Coloured by potential risk for you.</span>
+    </div>
+    <div class="card">
+      <div class="ing-list">
+        ${buildIngredients(p)}
+      </div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--alert-critical)"></i>From your alerts</span>
+        <span><i class="dot" style="background:var(--alert-warning)"></i>General risk</span>
+        <span><i class="dot" style="background:var(--t-tertiary)"></i>Neutral</span>
+      </div>
+    </div>
+
+    <!-- 7. Better alternatives -->
+    <div class="section-title">
+      <span class="name">Better alternatives</span>
+      <span class="lead">Same category, higher Nutri-Score.</span>
+    </div>
+    <div class="alt-scroll">
+      <div class="alt-card">
+        <div class="photo" data-tone="green">H<div class="ns-mini ns-a">A</div></div>
+        <div class="name">Whole Earth Hazelnut Butter</div>
+        <div class="row"><span class="brand">Whole Earth</span></div>
+      </div>
+      <div class="alt-card">
+        <div class="photo" data-tone="cream">T<div class="ns-mini ns-a">A</div></div>
+        <div class="name">Tahini-Cocoa Spread</div>
+        <div class="row"><span class="brand">Earthy</span></div>
+      </div>
+      <div class="alt-card">
+        <div class="photo" data-tone="amber">P<div class="ns-mini ns-b">B</div></div>
+        <div class="name">Pip &amp; Nut Cocoa</div>
+        <div class="row"><span class="brand">Pip&amp;Nut</span></div>
+      </div>
+      <div class="alt-card">
+        <div class="photo" data-tone="rose">N<div class="ns-mini ns-c">C</div></div>
+        <div class="name">Nocciolata Bio</div>
+        <div class="row"><span class="brand">Rigoni</span></div>
+      </div>
+    </div>
+  `;
+}
+
+/* Wire interactive bits inside a freshly-rendered report container */
+function wireReport(container) {
+  if (!container) return;
+  wireAiInput(container.querySelector('[data-ai-input="report"]'));
+  container.querySelectorAll('.ai-bubbles .ai-bubble').forEach(btn => {
+    btn.addEventListener('click', () => goTo('chat', 'a', btn.dataset.q));
+  });
+}
+
+/* v2 cam-sheet: renders the same report as the full Report screen */
+function showCamSheet(p) {
+  const sheet = document.getElementById('cam-sheet');
+  const body = document.getElementById('cs-body');
+  if (!sheet || !body) return;
+  body.innerHTML = renderReportHTML(p);
+  wireReport(body);
+  sheet.classList.remove('expanded');
+  sheet.classList.add('visible');
+}
+
+/* Wire an in-report AI input row: typing fills, send button + Enter both submit */
+function wireAiInput(row) {
+  if (!row) return;
+  const input = row.querySelector('input');
+  const send = row.querySelector('.send');
+  if (!input || !send) return;
+  const submit = () => {
+    const v = input.value.trim();
+    if (!v) return;
+    input.value = '';
+    goTo('chat', 'a', v);
+  };
+  send.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+}
+
+function hideCamSheet() {
+  const sheet = document.getElementById('cam-sheet');
+  if (!sheet) return;
+  sheet.classList.remove('visible', 'expanded');
+}
+
+function expandCamSheet() {
+  const sheet = document.getElementById('cam-sheet');
+  if (!sheet) return;
+  sheet.classList.toggle('expanded');
+}
+
+function clearCards() {
+  document.getElementById('mini-track').innerHTML = '';
+  updateDots();
+}
+
+function updateDots() {
+  const dots = document.getElementById('mini-dots');
+  const cards = document.querySelectorAll('#mini-track .mini-card');
+  dots.innerHTML = '';
+  if (cards.length <= 1) return;
+  cards.forEach((_, i) => {
+    const dot = document.createElement('span');
+    dot.className = 'mini-dot' + (i === cards.length - 1 ? ' active' : '');
+    dots.appendChild(dot);
+  });
+}
+
+function updateActiveCard() {
+  const track = document.getElementById('mini-track');
+  const cards = track.querySelectorAll('.mini-card');
+  if (!cards.length) return;
+  const center = track.scrollLeft + track.clientWidth / 2;
+  let activeIdx = 0, minDist = Infinity;
+  cards.forEach((c, i) => {
+    const cc = c.offsetLeft + c.offsetWidth / 2;
+    const d = Math.abs(cc - center);
+    if (d < minDist) { minDist = d; activeIdx = i; }
+  });
+  document.querySelectorAll('.mini-dot').forEach((d, i) => d.classList.toggle('active', i === activeIdx));
+  const kind = cards[activeIdx].dataset.kind;
+  if (kind && state.scan !== kind) {
+    const p = PRODUCTS[kind];
+    state.scan = kind;
+    state.product = p;
+    syncReport(p);
+    syncPinned(p);
+    document.getElementById('info-scan').textContent = p.name + ' (' + p.ns + ')';
+  }
+}
+
+document.getElementById('mini-track').addEventListener('scroll', () => {
+  clearTimeout(updateActiveCard._t);
+  updateActiveCard._t = setTimeout(updateActiveCard, 80);
+});
+
+/* Mouse drag-to-swipe for desktop */
+(function enableDragSwipe() {
+  const track = document.getElementById('mini-track');
+  let isDown = false, startX = 0, startScroll = 0, moved = false;
+  track.addEventListener('mousedown', (e) => {
+    isDown = true; moved = false;
+    startX = e.pageX; startScroll = track.scrollLeft;
+    track.style.cursor = 'grabbing';
+    track.style.scrollBehavior = 'auto';
+  });
+  window.addEventListener('mouseup', () => {
+    if (!isDown) return;
+    isDown = false;
+    track.style.cursor = '';
+    track.style.scrollBehavior = '';
+    const cards = track.querySelectorAll('.mini-card');
+    if (!cards.length) return;
+    const center = track.scrollLeft + track.clientWidth / 2;
+    let nearest = cards[0], minDist = Infinity;
+    cards.forEach(c => {
+      const cc = c.offsetLeft + c.offsetWidth / 2;
+      const d = Math.abs(cc - center);
+      if (d < minDist) { minDist = d; nearest = c; }
+    });
+    nearest.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!isDown) return;
+    const dx = e.pageX - startX;
+    if (Math.abs(dx) > 4) moved = true;
+    track.scrollLeft = startScroll - dx;
+  });
+  track.addEventListener('click', (e) => {
+    if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; }
+  }, true);
+})();
+
+function simulateScan(kind) {
+  const mask = document.getElementById('camera-mask');
+  const hint = document.getElementById('camera-hint');
+  hideEmpty();
+  mask.classList.remove('scanned');
+  setTimeout(() => {
+    mask.classList.add('scanned');
+    hint.style.opacity = 0;
+    if (window.navigator.vibrate) window.navigator.vibrate(20);
+    setTimeout(() => {
+      appendScan(kind);
+      showToast('Recognised');
+    }, 280);
+  }, 100);
+}
+
+function resetScan({ showEmptyState = true } = {}) {
+  document.getElementById('camera-mask').classList.remove('scanned');
+  document.getElementById('camera-hint').style.opacity = 1;
+  clearCards();
+  hideCamSheet();
+  if (state.version === '1' && showEmptyState) showEmpty(state.emptyMode);
+  else hideEmpty();
+  state.scan = null;
+  document.getElementById('info-scan').textContent = '—';
+}
+
+function quickOpen(kind) {
+  const p = PRODUCTS[kind];
+  state.scan = kind;
+  state.product = p;
+  syncReport(p);
+  syncPinned(p);
+  document.getElementById('info-scan').textContent = p.name + ' (' + p.ns + ')';
+  goTo('report');
+}
+
+/* Full Report screen: same renderer as the cam-sheet — one report, two contexts */
+function syncReport(p) {
+  const body = document.getElementById('sheet-body');
+  if (!body) return;
+  body.innerHTML = renderReportHTML(p);
+  wireReport(body);
+}
+
+function syncPinned(p) {
+  const photo = document.getElementById('pin-photo');
+  photo.textContent = p.monogram;
+  photo.dataset.tone = p.tone;
+  document.getElementById('pin-name').textContent = p.name;
+  document.getElementById('pin-brand').textContent = p.brand;
+  const pn = document.getElementById('pin-ns');
+  pn.className = 'ns-mini ' + (p.ns === 'NA' ? 'ns-na' : 'ns-' + p.ns.toLowerCase());
+  pn.textContent = p.ns === 'NA' ? '—' : p.ns;
+}
+
+/* ====== Chat ====== */
+const SUGGESTIONS = {
+  a: [
+    'Can I have this with my weight loss goal?',
+    'What can I replace it with?',
+    'What\'s unsafe for a child 0–3?',
+    'How much sugar is in this?',
+  ],
+  b: [
+    'What is Nutri-Score?',
+    'Which additives should I avoid during pregnancy?',
+    'What should I read about clean eating?',
+    'How can I cut sugar in my diet?',
+  ]
+};
+
+/* Past chats — mock history for V2 demo */
+const PAST_CHATS = [
+  {
+    id: 'c-nutella',
+    mode: 'a',
+    productName: 'Nutella',
+    productSub: 'Ferrero · 350 g',
+    photoLetter: 'N',
+    photoTone: 'amber',
+    when: 'Yesterday',
+    preview: 'How much sugar is in this?',
+    messages: [
+      { role: 'user', text: 'How much sugar is in this?' },
+      { role: 'ai', text: '<b>56.3 g</b> per 100 g — about 2.5 tbsp of sugar in every spoonful. Above your weight-loss goal threshold.' },
+      { role: 'user', text: 'What can I replace it with?' },
+      { role: 'ai', text: 'Try a <b>no-sugar-added almond butter</b> or a <b>dark-chocolate hazelnut spread (≥70%)</b> — both keep the flavour but cut sugar by 60–80%.' },
+    ],
+  },
+  {
+    id: 'c-honey',
+    mode: 'a',
+    productName: 'Mountain Apiary Raw Wildflower Honey',
+    productSub: 'Mountain Apiary · 500 g',
+    photoLetter: 'M',
+    photoTone: 'cream',
+    when: '2 days ago',
+    preview: "What's unsafe for a child 0–3?",
+    messages: [
+      { role: 'user', text: "What's unsafe for a child 0–3?" },
+      { role: 'ai', text: '<b>Avoid for under 12 months</b> — raw honey carries a small risk of infant botulism. Safe from 1 year and up.' },
+    ],
+  },
+  {
+    id: 'c-keto',
+    mode: 'b',
+    productName: 'AI assistant',
+    productSub: 'No product context',
+    photoLetter: '',
+    photoTone: 'ai',
+    when: '3 days ago',
+    preview: "What's keto-friendly at the supermarket?",
+    messages: [
+      { role: 'user', text: "What's keto-friendly at the supermarket?" },
+      { role: 'ai', text: 'Stick to the perimeter: eggs, full-fat dairy, fatty fish, leafy greens, avocados, nuts. Skip anything with added sugar, grains or starchy vegetables.' },
+    ],
+  },
+  {
+    id: 'c-yogurt',
+    mode: 'a',
+    productName: 'Activia Plain Greek',
+    productSub: 'Danone · 150 g',
+    photoLetter: 'A',
+    photoTone: 'green',
+    when: '5 days ago',
+    preview: 'Is this a good buy on my weight goal?',
+    messages: [
+      { role: 'user', text: 'Is this a good buy on my weight goal?' },
+      { role: 'ai', text: '<b>Yes — solid pick.</b> Nutri-Score A, 9 g protein per 100 g, no added sugar. Good fit for your weight-loss target.' },
+    ],
+  },
+];
+
+function renderChatHistory() {
+  const list = document.getElementById('ch-list');
+  const meta = document.getElementById('ch-meta');
+  const empty = document.getElementById('ch-empty');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!PAST_CHATS.length) {
+    empty.style.display = '';
+    meta.textContent = '0 chats';
+    return;
+  }
+  empty.style.display = 'none';
+  meta.textContent = PAST_CHATS.length + (PAST_CHATS.length === 1 ? ' chat' : ' chats');
+  PAST_CHATS.forEach(chat => {
+    const btn = document.createElement('button');
+    btn.className = 'ch-item';
+    const photoContent = chat.photoTone === 'ai'
+      ? '<svg><use href="#i-sparkle"/></svg>'
+      : chat.photoLetter;
+    btn.innerHTML = `
+      <div class="photo" data-tone="${chat.photoTone}">${photoContent}</div>
+      <div class="info">
+        <div class="top-row">
+          <div class="name">${chat.productName}</div>
+          <div class="when">${chat.when}</div>
+        </div>
+        <div class="preview">${chat.preview}</div>
+      </div>
+    `;
+    btn.addEventListener('click', () => loadPastChat(chat.id));
+    list.appendChild(btn);
+  });
+}
+
+function loadPastChat(id) {
+  const chat = PAST_CHATS.find(c => c.id === id);
+  if (!chat) return;
+  goTo('chat');
+  setChatMode(chat.mode);
+  if (chat.mode === 'a') {
+    document.getElementById('chat-title-name').textContent = chat.productName;
+    document.getElementById('chat-title-sub').textContent = 'AI · about this product';
+    const pin = document.getElementById('pinned-card');
+    pin.classList.remove('hidden');
+    document.getElementById('pin-photo').setAttribute('data-tone', chat.photoTone);
+    document.getElementById('pin-photo').textContent = chat.photoLetter;
+    document.getElementById('pin-name').textContent = chat.productName;
+    document.getElementById('pin-brand').textContent = chat.productSub;
+    const ns = document.getElementById('pin-ns');
+    ns.style.display = 'none';
+  }
+  state.chatStarted = true;
+  const body = document.getElementById('chat-body');
+  body.innerHTML = '';
+  chat.messages.forEach(m => {
+    const b = document.createElement('div');
+    b.className = 'bubble ' + (m.role === 'user' ? 'user' : 'ai');
+    b.innerHTML = m.text;
+    body.appendChild(b);
+  });
+  body.scrollTop = body.scrollHeight;
+}
+
+function setChatMode(mode) {
+  state.chatMode = mode;
+  document.querySelectorAll('#chat-mode-toggle button').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  const pinned = document.getElementById('pinned-card');
+  if (mode === 'a') {
+    pinned.classList.remove('hidden');
+    document.getElementById('chat-title-name').textContent = state.product.name;
+    document.getElementById('chat-title-sub').textContent = 'AI · about this product';
+  } else {
+    pinned.classList.add('hidden');
+    document.getElementById('chat-title-name').textContent = 'AI assistant';
+    document.getElementById('chat-title-sub').textContent = 'No product context';
+  }
+  const welcomeTitle = document.getElementById('welcome-title');
+  const welcomeSub = document.getElementById('welcome-sub');
+  if (welcomeTitle && welcomeSub) {
+    welcomeTitle.textContent = mode === 'a' ? 'Ask anything about this product' : 'Ask about food, ingredients, or your goals';
+    welcomeSub.textContent = mode === 'a'
+      ? 'Answers are shaped by your allergies, diet, and goals.'
+      : 'AI uses your profile for context.';
+  }
+  resetChat();
+  document.getElementById('info-mode').textContent = mode.toUpperCase();
+}
+
+document.querySelectorAll('#chat-mode-toggle button').forEach(b => {
+  b.addEventListener('click', () => setChatMode(b.dataset.mode));
+});
+
+function renderWelcome() {
+  const wrap = document.getElementById('suggestion-chips');
+  wrap.innerHTML = '';
+  document.getElementById('chat-welcome').style.display = '';
+  SUGGESTIONS[state.chatMode].forEach(text => {
+    const btn = document.createElement('button');
+    btn.className = 'suggestion';
+    btn.textContent = text;
+    btn.addEventListener('click', () => sendMessage(text));
+    wrap.appendChild(btn);
+  });
+}
+
+function resetChat() {
+  state.chatStarted = false;
+  document.getElementById('chat-body').innerHTML = `
+    <div class="welcome" id="chat-welcome">
+      <div class="icon" id="welcome-icon"><svg><use href="#i-sparkle"/></svg></div>
+      <h3 id="welcome-title"></h3>
+      <p id="welcome-sub"></p>
+    </div>
+    <div class="suggestion-chips" id="suggestion-chips"></div>
+  `;
+  const welcomeTitle = document.getElementById('welcome-title');
+  const welcomeSub = document.getElementById('welcome-sub');
+  welcomeTitle.textContent = state.chatMode === 'a' ? 'Ask anything about this product' : 'Ask about food, ingredients, or your goals';
+  welcomeSub.textContent = state.chatMode === 'a'
+    ? 'Answers are shaped by your allergies, diet, and goals.'
+    : 'AI uses your profile for context.';
+  renderWelcome();
+}
+
+function sendMessage(text) {
+  if (!text || !text.trim()) return;
+  const body = document.getElementById('chat-body');
+  if (!state.chatStarted) {
+    state.chatStarted = true;
+    body.innerHTML = '';
+  }
+  const ub = document.createElement('div');
+  ub.className = 'bubble user';
+  ub.textContent = text;
+  body.appendChild(ub);
+  body.scrollTop = body.scrollHeight;
+
+  const typing = document.createElement('div');
+  typing.className = 'typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  body.appendChild(typing);
+  body.scrollTop = body.scrollHeight;
+
+  setTimeout(() => {
+    typing.remove();
+    const reply = aiReply(text);
+    reply.forEach((node, i) => {
+      setTimeout(() => {
+        body.appendChild(node);
+        body.scrollTop = body.scrollHeight;
+      }, i * 250);
+    });
+  }, 900);
+
+  document.getElementById('chat-input').value = '';
+}
+
+function aiReply(q) {
+  const lower = q.toLowerCase();
+  const out = [];
+  const ai = (html) => {
+    const b = document.createElement('div');
+    b.className = 'bubble ai';
+    b.innerHTML = html;
+    return b;
+  };
+  const cardEl = (monogram, tone, name, brand, ns) => {
+    const c = document.createElement('div');
+    c.className = 'bubble-card';
+    c.innerHTML = `<div class="photo" data-tone="${tone}">${monogram}</div><div class="info"><div class="name">${name}</div><div class="brand">${brand}</div></div><div class="ns-mini ns-${ns.toLowerCase()}">${ns}</div>`;
+    c.addEventListener('click', () => goTo('report'));
+    return c;
+  };
+
+  if (state.chatMode === 'a') {
+    if (lower.includes('replace') || lower.includes('alternativ')) {
+      out.push(ai(`Given your <b>weight loss</b> goal and tree-nut intolerance — three safer options:`));
+      out.push(cardEl('T', 'cream', 'Tahini-Cocoa Spread', 'Earthy · 250 g', 'A'));
+      out.push(cardEl('P', 'amber', 'Pip & Nut Cocoa', 'Pip&Nut · 225 g', 'B'));
+      out.push(ai(`If you want a fully hazelnut-free option, <b>Tahini-Cocoa</b> is the closest in taste — lower sugar, higher protein.`));
+    } else if (lower.includes('sugar')) {
+      out.push(ai(`Nutella has <b>56 g sugar / 100 g</b> — over double the WHO daily limit (≤ 25 g).<br>One 15 g serving → 8.4 g sugar (≈ 2 tsp).`));
+      out.push(ai(`With your weight loss goal, stick to 1 serving per day or pick an alternative with less than 10 g / 100 g.`));
+    } else if (lower.includes('child') || lower.includes('kid') || lower.includes('baby') || lower.includes('0–3') || lower.includes('0-3')) {
+      out.push(ai(`For a child 0–3, this product has several risks:<br>• <b>Soy lecithin (E322)</b> — potential allergen<br>• <b>56 % sugar</b> — WHO recommends no added sugar before age 2<br>• <b>Whole nuts</b> in ingredients — aspiration risk under age 4`));
+    } else if (lower.includes('goal') || lower.includes('can i') || lower.includes('weight') || lower.includes('lose')) {
+      out.push(ai(`Short answer: <b>I wouldn't recommend it</b>. Your profile has «lose weight» and tree-nut intolerance.<br><br>Main blocker: the <b>allergen (hazelnut)</b>. Even without it — 56 g sugar / 100 g goes against your goal.`));
+    } else {
+      out.push(ai(`<b>${state.product.name}</b> has a Nutri-Score of <b>${state.product.ns}</b>: ${state.product.sub.toLowerCase()} Given your profile, there are critical alerts — I wouldn't recommend it.`));
+    }
+  } else {
+    if (lower.includes('nutri') || lower.includes('score')) {
+      out.push(ai(`<b>Nutri-Score</b> is a European label from A (green, best) to E (red, worst). It accounts for sugar, saturated fat, salt, protein, fibre, fruit/nuts.<br><br>It's a <b>relative</b> metric within a category — pizza A is better than pizza D, but it's still pizza.`));
+    } else if (lower.includes('pregnan')) {
+      out.push(ai(`During pregnancy, avoid:<br>• <b>Caffeine</b> &gt; 200 mg / day<br>• <b>Raw meat / fish, unpasteurised cheese</b><br>• <b>Alcohol</b> — zero<br>• <b>Vitamin A</b> in high doses (liver)<br>• <b>Mercury</b> in large fish (tuna, swordfish)`));
+    } else if (lower.includes('clean') || lower.includes('whole')) {
+      out.push(ai(`The core principle of clean eating — <b>NOVA 1–2</b> instead of 4. Less packaging, shorter ingredient lists.<br><br>Good sources: Michael Pollan «In Defense of Food», and Carlos Monteiro's work on the NOVA classification.`));
+    } else if (lower.includes('sugar')) {
+      out.push(ai(`Fastest wins:<br>• <b>Swap drinks</b> — the biggest source of hidden sugar<br>• Read labels on «diet» products and sauces<br>• Replace sugary snacks with nuts / plain yoghurt<br>• Go gradual (3–4 weeks) — your taste adapts`));
+    } else {
+      out.push(ai(`In production, AI uses your profile — goals, allergies, situation — to give a detailed answer. This is a prototype response.`));
+    }
+  }
+  return out;
+}
+
+document.getElementById('chat-send').addEventListener('click', () => {
+  const v = document.getElementById('chat-input').value;
+  if (v.trim()) sendMessage(v);
+});
+document.getElementById('chat-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const v = document.getElementById('chat-input').value;
+    if (v.trim()) sendMessage(v);
+  }
+});
+
+/* ====== Profile chips ======
+   V1: chips are directly toggleable (legacy behaviour).
+   V2: chips render as read-only summaries; the picker lives in #screen-profile-edit. */
+document.querySelectorAll('.chip-grid').forEach(grid => {
+  grid.querySelectorAll('.pchip[data-on]').forEach(c => c.classList.add('active'));
+
+  grid.addEventListener('click', (e) => {
+    if (state.version === '2') return;
+    const chip = e.target.closest('.pchip');
+    if (!chip) return;
+    chip.classList.toggle('active');
+    updateCount(grid.dataset.section);
+  });
+  updateCount(grid.dataset.section);
+});
+
+/* ====== Profile — edit sheet (v2) ====== */
+const PE_TITLES = {
+  allergies: 'Allergies',
+  situation: 'Situation',
+  diet:      'Diet',
+  goals:     'Health goals',
+};
+
+document.querySelectorAll('.pf-edit[data-edit-section]').forEach(btn => {
+  btn.addEventListener('click', () => openProfileEdit(btn.dataset.editSection));
+});
+
+function openProfileEdit(section) {
+  const grid = document.querySelector(`.chip-grid[data-section="${section}"]`);
+  if (!grid) return;
+  document.getElementById('pe-title').textContent = (PE_TITLES[section] || section).toUpperCase();
+  renderProfileEditList(section);
+  goTo('profile-edit');
+}
+
+function closeProfileEdit() {
+  goTo('profile');
+}
+
+function renderProfileEditList(section) {
+  const grid = document.querySelector(`.chip-grid[data-section="${section}"]`);
+  const body = document.getElementById('pe-body');
+  body.innerHTML = '';
+  if (!grid) return;
+
+  const chips = Array.from(grid.querySelectorAll('.pchip'));
+  const selected   = chips.filter(c => c.classList.contains('active'));
+  const unselected = chips.filter(c => !c.classList.contains('active'))
+                          .sort((a, b) => a.textContent.localeCompare(b.textContent));
+
+  if (selected.length) {
+    body.appendChild(makePeHeader(`Selected · ${selected.length}`));
+    selected.forEach(chip => body.appendChild(makePeRow(chip, section, true)));
+  }
+  if (unselected.length) {
+    body.appendChild(makePeHeader(selected.length ? 'All options' : 'Available'));
+    unselected.forEach(chip => body.appendChild(makePeRow(chip, section, false)));
+  }
+  if (!chips.length) {
+    const empty = document.createElement('div');
+    empty.className = 'pe-empty';
+    empty.textContent = 'Nothing to choose from yet.';
+    body.appendChild(empty);
+  }
+}
+
+function makePeHeader(text) {
+  const h = document.createElement('div');
+  h.className = 'pe-section-header';
+  h.textContent = text;
+  return h;
+}
+
+function makePeRow(chip, section, isSelected) {
+  const row = document.createElement('div');
+  row.className = 'pe-row' + (isSelected ? ' selected' : '');
+  const label = chip.textContent;
+  // Preserve severity tags (crit/warn) so users see why an item matters
+  const severity = chip.classList.contains('crit') ? 'crit'
+                 : chip.classList.contains('warn') ? 'warn' : '';
+  const tagText  = severity === 'crit' ? 'Critical'
+                 : severity === 'warn' ? 'Caution'  : '';
+  row.innerHTML = `
+    <span class="pe-label">${label}${tagText ? `<span class="pe-tag ${severity}">${tagText}</span>` : ''}</span>
+    <span class="pe-check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12 L10 17 L19 7" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  `;
+  row.addEventListener('click', () => {
+    chip.classList.toggle('active');
+    row.classList.toggle('selected');
+    updateCount(section);
+    // Keep the header count fresh without resorting (avoids items jumping under finger)
+    const header = document.querySelector('#pe-body .pe-section-header');
+    if (header && header.textContent.startsWith('Selected')) {
+      const n = document.querySelectorAll('#pe-body .pe-row.selected').length;
+      header.textContent = `Selected · ${n}`;
+    }
+  });
+  return row;
+}
+
+function updateCount(section) {
+  const grid = document.querySelector(`.chip-grid[data-section="${section}"]`);
+  const counter = document.querySelector(`.count[data-count-of="${section}"]`);
+  if (!grid || !counter) return;
+  const n = grid.querySelectorAll('.pchip.active').length;
+  counter.textContent = n || '';
+  const allCounts = Array.from(document.querySelectorAll('.count[data-count-of]'))
+    .reduce((sum, c) => sum + (parseInt(c.textContent) || 0), 0);
+  document.getElementById('empty-profile-banner').classList.toggle('hidden', allCounts > 0);
+}
+
+/* ====== Demo buttons (left panel) ====== */
+function setActiveDemo(id) {
+  document.querySelectorAll('#demo-nav .pill').forEach(p => p.classList.remove('active'));
+  if (id) document.getElementById(id)?.classList.add('active');
+}
+
+document.getElementById('demo-empty').addEventListener('click', () => { setActiveDemo('demo-empty'); goTo('camera'); state.emptyMode = 'clean'; resetScan(); if (state.version === '2') hideEmpty(); });
+document.getElementById('demo-empty-history').addEventListener('click', () => { setActiveDemo('demo-empty-history'); goTo('camera'); state.emptyMode = 'history'; resetScan(); });
+document.getElementById('demo-bad').addEventListener('click', () => { setActiveDemo('demo-bad'); goTo('camera'); resetScan({ showEmptyState: false }); setTimeout(() => simulateScan('bad'), 200); });
+document.getElementById('demo-good').addEventListener('click', () => { setActiveDemo('demo-good'); goTo('camera'); resetScan({ showEmptyState: false }); setTimeout(() => simulateScan('good'), 200); });
+document.getElementById('demo-na').addEventListener('click', () => { setActiveDemo('demo-na'); goTo('camera'); resetScan({ showEmptyState: false }); setTimeout(() => simulateScan('na'), 200); });
+document.getElementById('demo-three').addEventListener('click', () => {
+  setActiveDemo('demo-three');
+  goTo('camera');
+  resetScan({ showEmptyState: false });
+  document.getElementById('camera-hint').style.opacity = 0;
+  document.getElementById('camera-mask').classList.add('scanned');
+  ['bad', 'good', 'na'].forEach((k, i) => {
+    setTimeout(() => {
+      appendScan(k);
+      if (i === 2) showToast('3 scans · swipe ←/→');
+    }, 250 + i * 320);
+  });
+});
+document.getElementById('demo-history').addEventListener('click', () => {
+  setActiveDemo('demo-history');
+  goTo('history');
+});
+document.getElementById('demo-empty-profile').addEventListener('click', () => {
+  setActiveDemo('demo-empty-profile');
+  goTo('profile');
+  document.querySelectorAll('.pchip.active').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.count[data-count-of]').forEach(c => c.textContent = '');
+  document.getElementById('empty-profile-banner').classList.remove('hidden');
+});
+document.getElementById('demo-fill-profile').addEventListener('click', () => {
+  setActiveDemo('demo-fill-profile');
+  goTo('profile');
+  document.querySelectorAll('.pchip[data-on]').forEach(c => c.classList.add('active'));
+  ['allergies','situation','diet','goals'].forEach(updateCount);
+});
+
+/* ====== V2 Screens panel — screen tree wiring ====== */
+function setActiveStateV2(stateKey) {
+  document.querySelectorAll('#screen-nav-v2 .st-state').forEach(b => {
+    b.classList.toggle('active', b.dataset.state === stateKey);
+  });
+}
+
+document.querySelectorAll('#screen-nav-v2 .st-screen').forEach(b => {
+  b.addEventListener('click', () => {
+    setActiveStateV2(null);
+    goTo(b.dataset.go);
+  });
+});
+
+const V2_STATE_MAP = {
+  'empty-clean':    () => document.getElementById('demo-empty').click(),
+  'bad':            () => document.getElementById('demo-bad').click(),
+  'good':           () => document.getElementById('demo-good').click(),
+  'na':             () => document.getElementById('demo-na').click(),
+  'empty-profile':  () => document.getElementById('demo-empty-profile').click(),
+  'fill-profile':   () => document.getElementById('demo-fill-profile').click(),
+  'chat-a':         () => goTo('chat', 'a'),
+  'chat-b':         () => goTo('chat', 'b'),
+};
+
+document.querySelectorAll('#screen-nav-v2 .st-state').forEach(b => {
+  b.addEventListener('click', () => {
+    const fn = V2_STATE_MAP[b.dataset.state];
+    if (fn) fn();
+    setActiveStateV2(b.dataset.state);
+  });
+});
+
+/* ====== Toast ====== */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+/* ====== Cam-sheet wiring (v2) ====== */
+(function wireCamSheet() {
+  const grip = document.getElementById('cs-grip-area');
+  const close = document.getElementById('cs-close');
+  const sheet = document.getElementById('cam-sheet');
+  if (!grip || !close || !sheet) return;
+
+  const THRESHOLD = 18;
+  let pointerStartY = null;
+  let pointerActive = false;
+  let didMove = false;
+
+  function onPointerStart(y) {
+    pointerStartY = y;
+    pointerActive = true;
+    didMove = false;
+  }
+  function onPointerMove(y) {
+    if (!pointerActive) return;
+    if (Math.abs(y - pointerStartY) > 4) didMove = true;
+  }
+  function onPointerEnd(y) {
+    if (!pointerActive) return;
+    pointerActive = false;
+    const dy = y - pointerStartY;
+    if (dy < -THRESHOLD) {
+      sheet.classList.add('expanded');
+    } else if (dy > THRESHOLD) {
+      if (sheet.classList.contains('expanded')) sheet.classList.remove('expanded');
+      else hideCamSheet();
+    } else if (!didMove) {
+      // Treat short tap as expand toggle
+      sheet.classList.toggle('expanded');
+    }
+  }
+
+  // Touch
+  grip.addEventListener('touchstart', (e) => onPointerStart(e.touches[0].clientY), { passive: true });
+  grip.addEventListener('touchmove',  (e) => onPointerMove(e.touches[0].clientY), { passive: true });
+  grip.addEventListener('touchend',   (e) => onPointerEnd(e.changedTouches[0].clientY));
+  grip.addEventListener('touchcancel',() => { pointerActive = false; });
+
+  // Mouse — track on window so dragging outside the grip still resolves
+  grip.addEventListener('mousedown', (e) => { e.preventDefault(); onPointerStart(e.clientY); });
+  window.addEventListener('mousemove', (e) => onPointerMove(e.clientY));
+  window.addEventListener('mouseup',   (e) => onPointerEnd(e.clientY));
+
+  // Suppress synthetic click after a drag — the click would otherwise toggle the state we just set
+  grip.addEventListener('click', (e) => {
+    if (didMove) {
+      e.preventDefault();
+      e.stopPropagation();
+      didMove = false;
+    }
+  }, true);
+
+  // The "Swipe up for full report" hint inside the sheet body — explicit expand
+  document.addEventListener('click', (e) => {
+    const hint = e.target.closest('.cs-expand-hint');
+    if (hint) sheet.classList.add('expanded');
+  });
+
+  close.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideCamSheet();
+    document.getElementById('camera-mask').classList.remove('scanned');
+    document.getElementById('camera-hint').style.opacity = 1;
+    state.scan = null;
+    document.getElementById('info-scan').textContent = '—';
+  });
+})();
+
+/* ====== Init ====== */
+syncReport(state.product);
+syncPinned(state.product);
+renderWelcome();
+setVersion('1');
+</script>
+
+</body>
+</html>
