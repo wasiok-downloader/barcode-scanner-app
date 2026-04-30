@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Barcode Scanner — Prototype</title>
+<title>AI Barcode Scanner — Prototype Review</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -809,6 +809,24 @@
   }
   /* When a real image is present, neutralize the tone gradient so it doesn't leak around the contained image */
   .product-hero .photo[data-tone]:has(> img) { background: var(--raised); }
+  /* Placeholder icon — shown when no API image is available.
+     Generic rule: scales to 40% of any photo-style container (works for product-hero, pinned-card,
+     h-item, ch-item, bubble-card, alt-card, mc-photo, es-photo). */
+  .photo > .photo-ph,
+  .mc-photo > .photo-ph,
+  .es-photo > .photo-ph {
+    width: 40%; height: 40%;
+    color: var(--t-tertiary);
+    opacity: 1;
+  }
+  /* When a photo container has no real image, use a single neutral background instead of the
+     per-product tone gradient. The gradient only shows briefly while a real image is loading. */
+  .photo:not(:has(> img)),
+  .mc-photo:not(:has(> img)),
+  .es-photo:not(:has(> img)) {
+    background: var(--sunken) !important;
+    border-color: var(--b-hairline) !important;
+  }
   .product-hero .col {
     display: flex; flex-direction: column;
     min-width: 0;
@@ -842,8 +860,9 @@
   }
   /* Legacy details span hidden if any old markup leaks through */
   .product-hero .details { display: none; }
-  /* Verdict pill — sits under the title, hugs its content */
-  .product-hero .verdict-mini {
+  /* Verdict pill — shared component; used in product-hero (report) and h-item (history). */
+  .product-hero .verdict-mini,
+  .h-item .verdict-mini {
     align-self: flex-start;
     display: inline-flex; align-items: center;
     gap: 7px;
@@ -855,13 +874,14 @@
     color: var(--t-secondary);
     white-space: nowrap;
   }
-  .product-hero.score-a .verdict-mini { color: var(--ns-a-text); }
-  .product-hero.score-b .verdict-mini { color: var(--ns-b-text); }
-  .product-hero.score-c .verdict-mini { color: var(--ns-c-text); }
-  .product-hero.score-d .verdict-mini { color: var(--ns-d-text); }
-  .product-hero.score-e .verdict-mini { color: var(--ns-e-text); }
-  .product-hero.score-na .verdict-mini { color: var(--t-secondary); }
-  .product-hero .verdict-mini .ns {
+  .product-hero.score-a .verdict-mini, .h-item.score-a .verdict-mini { color: var(--ns-a-text); }
+  .product-hero.score-b .verdict-mini, .h-item.score-b .verdict-mini { color: var(--ns-b-text); }
+  .product-hero.score-c .verdict-mini, .h-item.score-c .verdict-mini { color: var(--ns-c-text); }
+  .product-hero.score-d .verdict-mini, .h-item.score-d .verdict-mini { color: var(--ns-d-text); }
+  .product-hero.score-e .verdict-mini, .h-item.score-e .verdict-mini { color: var(--ns-e-text); }
+  .product-hero.score-na .verdict-mini, .h-item.score-na .verdict-mini { color: var(--t-secondary); }
+  .product-hero .verdict-mini .ns,
+  .h-item .verdict-mini .ns {
     width: 21px; height: 21px;
     border-radius: 6px;
     color: #fff;
@@ -872,12 +892,12 @@
     line-height: 1;
     flex-shrink: 0;
   }
-  .product-hero.score-a .verdict-mini .ns { background: var(--ns-a); }
-  .product-hero.score-b .verdict-mini .ns { background: var(--ns-b); }
-  .product-hero.score-c .verdict-mini .ns { background: var(--ns-c); color: #1A1500; }
-  .product-hero.score-d .verdict-mini .ns { background: var(--ns-d); }
-  .product-hero.score-e .verdict-mini .ns { background: var(--ns-e); }
-  .product-hero.score-na .verdict-mini .ns { background: var(--t-tertiary); }
+  .product-hero.score-a .verdict-mini .ns, .h-item.score-a .verdict-mini .ns { background: var(--ns-a); }
+  .product-hero.score-b .verdict-mini .ns, .h-item.score-b .verdict-mini .ns { background: var(--ns-b); }
+  .product-hero.score-c .verdict-mini .ns, .h-item.score-c .verdict-mini .ns { background: var(--ns-c); color: #1A1500; }
+  .product-hero.score-d .verdict-mini .ns, .h-item.score-d .verdict-mini .ns { background: var(--ns-d); }
+  .product-hero.score-e .verdict-mini .ns, .h-item.score-e .verdict-mini .ns { background: var(--ns-e); }
+  .product-hero.score-na .verdict-mini .ns, .h-item.score-na .verdict-mini .ns { background: var(--t-tertiary); }
 
   /* Verdict — hero (chromatic per score) */
   .verdict-card {
@@ -1019,38 +1039,40 @@
   .alert-item.warn    .body .title { color: var(--alert-warning-text); }
   .alert-item.info    .body .title { color: var(--alert-info-text); }
   .alert-item.success .body .title { color: var(--alert-success-text); }
-  .alert-item .body .desc {
-    font-size: 14px; color: var(--t-secondary);
-    margin-top: 6px; line-height: 1.45;
-  }
-  /* Per-ingredient match tags — one alert can fail multiple user concerns at once */
-  .alert-item .alert-tags {
-    display: flex; flex-wrap: wrap; gap: 6px;
-    margin-top: 10px;
-  }
-  .alert-item .alert-tag {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 11px; font-weight: 600;
-    letter-spacing: .04em;
-    padding: 4px 8px 4px 7px;
-    border-radius: 999px;
-    background: color-mix(in oklab, var(--t-primary) 6%, transparent);
+  /* Raw API metric — its own line below the title, mono numerals.
+     A separate line keeps the rhythm consistent across alerts whose
+     metric labels vary in width (e.g. "56.3 g / 100 g" vs.
+     "10.6 g sat. fat / 100 g"). */
+  .alert-item .alert-metric {
+    display: block;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-feature-settings: 'tnum';
+    font-size: 12px;
     color: var(--t-secondary);
-    border: 1px solid var(--b-hairline);
-    white-space: nowrap;
+    margin-top: 4px;
+    letter-spacing: -.005em;
   }
-  .alert-item .alert-tag::before {
-    content: ''; width: 5px; height: 5px; border-radius: 999px;
-    background: var(--t-tertiary);
+  /* Reasons — one row per matching profile tag, drawn from the tag DB.
+     Tag name leads in primary weight at title weight; description
+     follows in body color. No bullet — the weight contrast carries the
+     hierarchy and keeps all rows on the same left edge as the title. */
+  .alert-item .alert-reasons {
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 0;
+    display: flex; flex-direction: column;
+    gap: 8px;
   }
-  .alert-item.danger  .alert-tag { background: color-mix(in oklab, var(--alert-critical) 9%, var(--raised)); border-color: color-mix(in oklab, var(--alert-critical) 22%, var(--b-hairline)); color: var(--alert-critical-text); }
-  .alert-item.warn    .alert-tag { background: color-mix(in oklab, var(--alert-warning) 10%, var(--raised));  border-color: color-mix(in oklab, var(--alert-warning) 24%, var(--b-hairline));  color: var(--alert-warning-text); }
-  .alert-item.info    .alert-tag { background: color-mix(in oklab, var(--alert-info) 9%, var(--raised));     border-color: color-mix(in oklab, var(--alert-info) 22%, var(--b-hairline));     color: var(--alert-info-text); }
-  .alert-item.success .alert-tag { background: color-mix(in oklab, var(--alert-success) 9%, var(--raised));  border-color: color-mix(in oklab, var(--alert-success) 22%, var(--b-hairline));  color: var(--alert-success-text); }
-  .alert-item.danger  .alert-tag::before { background: var(--alert-critical); }
-  .alert-item.warn    .alert-tag::before { background: var(--alert-warning); }
-  .alert-item.info    .alert-tag::before { background: var(--alert-info); }
-  .alert-item.success .alert-tag::before { background: var(--alert-success); }
+  .alert-item .alert-reasons li {
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--t-secondary);
+  }
+  .alert-item .alert-reasons .reason-tag {
+    color: var(--t-primary);
+    font-weight: 700;
+    letter-spacing: -.005em;
+  }
 
   /* Breakdown accordion — internal rows hug card padding,
      first/last collapse their outer padding into the card's padding. */
@@ -1062,7 +1084,10 @@
     user-select: none;
   }
   .accordion-row:first-child { padding-top: 4px; }
-  .accordion-row:last-child { padding-bottom: 4px; border-bottom: 0; }
+  /* Last row sits at index nth-last-child(2) — its accordion-detail is
+     the actual last child of the card. Drop the rule on it so the list
+     ends cleanly without a hairline floating below the final row. */
+  .accordion-row:nth-last-child(2) { padding-bottom: 4px; border-bottom: 0; }
   /* When open, the row visually attaches to its detail — no rule between them */
   .accordion-row.open { border-bottom: 0; }
   .accordion-row .label {
@@ -1140,6 +1165,41 @@
     background: color-mix(in oklab, var(--alert-success) 12%, var(--raised));
     border-color: color-mix(in oklab, var(--alert-success) 24%, var(--b-hairline));
     color: var(--alert-success-text);
+  }
+
+  /* Ingredient legend — readable trio of mini-chip swatches.
+     Distinct from the dev-panel .legend (which uses dots + mono caps). */
+  .ing-legend {
+    display: flex; flex-wrap: wrap;
+    gap: 8px 18px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--b-hairline);
+  }
+  .ing-legend > span {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; line-height: 1;
+    font-weight: 500;
+    color: var(--t-secondary);
+    letter-spacing: -.005em;
+  }
+  .ing-legend .swatch {
+    width: 14px; height: 14px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    flex-shrink: 0;
+  }
+  .ing-legend .swatch.alert {
+    background: var(--alert-critical);
+    border-color: var(--alert-critical);
+  }
+  .ing-legend .swatch.warn {
+    background: #FFE6B8;
+    border-color: #F2C56A;
+  }
+  .ing-legend .swatch.ok {
+    background: color-mix(in oklab, var(--alert-success) 12%, var(--raised));
+    border-color: color-mix(in oklab, var(--alert-success) 24%, var(--b-hairline));
   }
 
   /* Suggested chat chips (in report) */
@@ -1275,6 +1335,85 @@
   .ai-input-row .send:disabled { opacity: .35; cursor: not-allowed; background: var(--t-tertiary); }
   .ai-input-row .send svg { width: 16px; height: 16px; }
 
+  /* ===== AI Analysis — narrative paragraph that types itself in. =====
+     Distinguished from .ai-pitch (beige) below it by being a lifted white card. */
+  .ai-analysis {
+    margin-top: 32px;
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    border-radius: var(--r-lg);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    /* Cool violet + warm magenta tint reads as "AI" without being loud. */
+    box-shadow:
+      0 16px 36px -10px rgba(124, 92, 255, 0.28),
+      0 8px 18px -6px rgba(232, 92, 200, 0.14),
+      0 1px 3px rgba(10, 10, 10, 0.05);
+  }
+  .ai-analysis__head {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .ai-analysis__orb {
+    width: 32px; height: 32px; border-radius: 999px;
+    background: var(--raised);
+    border: 1px solid var(--b-hairline);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    color: var(--ai-ink);
+  }
+  .ai-analysis__orb svg { width: 16px; height: 16px; }
+  .ai-analysis__title {
+    font-size: 17px; font-weight: 700; letter-spacing: -.02em;
+    color: var(--t-primary);
+  }
+  .ai-analysis__body {
+    font-size: 16px; font-weight: 500; line-height: 1.45;
+    letter-spacing: -.005em;
+    color: var(--t-primary);
+    min-height: 1.45em;
+  }
+  .ai-analysis__bold { font-weight: 700; }
+  .ai-analysis__cursor {
+    display: inline-block;
+    width: 2px; height: 1em;
+    vertical-align: text-bottom;
+    margin-left: 1px;
+    background: var(--ai-ink);
+    animation: ai-analysis-blink 1s steps(2) infinite;
+  }
+  .ai-analysis__cursor--gone {
+    opacity: 0;
+    transition: opacity 200ms ease;
+    animation: none;
+  }
+  @keyframes ai-analysis-blink {
+    50% { opacity: 0; }
+  }
+  /* Pre-roll "thinking" — three dots animate while we pretend the AI is composing */
+  .ai-analysis__dots {
+    display: none;
+    gap: 4px; align-items: center;
+  }
+  .ai-analysis__dots span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--t-tertiary);
+    display: inline-block;
+    animation: typing 1.2s infinite;
+  }
+  .ai-analysis__dots span:nth-child(2) { animation-delay: .15s; }
+  .ai-analysis__dots span:nth-child(3) { animation-delay: .3s; }
+  .ai-analysis--thinking .ai-analysis__dots {
+    display: inline-flex;
+  }
+  .ai-analysis--thinking .ai-analysis__cursor {
+    display: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ai-analysis__cursor { animation: none; }
+  }
+
   /* Similar carousel */
   .alt-scroll {
     display: flex; gap: 12px;
@@ -1361,15 +1500,32 @@
   }
   .profile-header .badge {
     margin-top: 10px;
-    display: inline-flex; align-items: center; gap: 4px;
-    background: var(--inverse);
-    color: var(--t-inverse);
+    display: none;
+    align-items: center; gap: 5px;
     border-radius: 999px;
-    padding: 4px 12px;
+    padding: 4px 10px 4px 8px;
     font-size: 11px; font-weight: 600;
     letter-spacing: .12em;
     text-transform: uppercase;
+    border: 0;
+    font-family: inherit;
+    cursor: default;
   }
+  .profile-header .badge svg { width: 12px; height: 12px; }
+  .profile-header .badge.premium {
+    background: linear-gradient(135deg, #B8862E, #E8C46A);
+    color: #1A1100;
+  }
+  .profile-header .badge.free {
+    background: var(--sunken);
+    color: var(--t-secondary);
+    cursor: pointer;
+    transition: background-color 120ms;
+  }
+  .profile-header .badge.free:hover { background: var(--b-hairline); }
+  .profile-header .badge.free:active { transform: scale(.97); }
+  body[data-plan="premium"] .profile-header .badge.premium { display: inline-flex; }
+  body[data-plan="free"]    .profile-header .badge.free    { display: inline-flex; }
 
   .empty-banner {
     background: var(--inverse);
@@ -1553,15 +1709,6 @@
     background: rgba(0,0,0,.45);
     backdrop-filter: blur(2px);
   }
-  .pe-section-header {
-    font-size: 11px; font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .14em;
-    font-family: 'Geist Mono', monospace;
-    color: var(--t-tertiary);
-    padding: 18px 4px 8px;
-  }
-  .pe-section-header:first-child { padding-top: 4px; }
   .pe-row {
     display: flex; align-items: center; justify-content: space-between;
     gap: 12px;
@@ -1571,6 +1718,7 @@
     user-select: none;
     transition: background-color 120ms;
   }
+  .pe-row:last-child { border-bottom: 0; }
   .pe-row:hover { background: var(--sunken); }
   .pe-row:active { background: var(--b-hairline); }
   .pe-row .pe-label {
@@ -1579,16 +1727,6 @@
     color: var(--t-primary);
     letter-spacing: -.005em;
   }
-  .pe-row .pe-tag {
-    font-size: 11px;
-    font-family: 'Geist Mono', monospace;
-    text-transform: uppercase;
-    letter-spacing: .12em;
-    color: var(--t-tertiary);
-    margin-left: 8px;
-  }
-  .pe-row .pe-tag.crit { color: var(--alert-critical); }
-  .pe-row .pe-tag.warn { color: var(--alert-warning); }
   .pe-row .pe-check {
     flex-shrink: 0;
     width: 24px; height: 24px;
@@ -1609,6 +1747,35 @@
     padding: 24px 4px;
     color: var(--t-tertiary);
     font-size: 14px;
+  }
+
+  /* ============================================
+     REGION PICKER sheet
+  ============================================ */
+  #screen-region { background: rgba(0,0,0,.5); }
+  #screen-region::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,.45);
+    backdrop-filter: blur(2px);
+  }
+
+  /* ============================================
+     PAYWALL — placeholder sheet
+  ============================================ */
+  #screen-paywall { background: rgba(0,0,0,.5); }
+  #screen-paywall::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,.45);
+    backdrop-filter: blur(2px);
+  }
+  .paywall-placeholder {
+    display: grid; place-items: center;
+    padding: 80px 0;
+    font-size: 32px; font-weight: 700;
+    letter-spacing: -.02em;
+    color: var(--t-primary);
   }
 
   /* ============================================
@@ -2020,41 +2187,55 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     color: var(--t-primary);
   }
-  .h-item .verdict-line {
-    margin-top: 6px;
-    display: flex; align-items: center; gap: 8px;
+  /* Meta row — verdict-mini and micro-alerts share one horizontal line,
+     wrapping only when the row genuinely runs out of room. */
+  .h-item .h-meta {
+    display: flex; align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-top: 8px;
   }
-  .h-item .v-badge {
-    width: 28px; height: 28px;
-    border-radius: 8px;
-    display: grid; place-items: center;
-    font-size: 18px; font-weight: 700;
-    color: #fff;
-    letter-spacing: -.04em;
-    flex-shrink: 0;
+  .h-item .h-meta:empty { display: none; }
+  .h-item .verdict-mini {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .h-item .verdict-mini > span:not(.ns) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  /* Micro-alerts — severity glyph + count, one chip per severity present. */
+  .h-item .h-alerts {
+    display: inline-flex; flex-wrap: wrap;
+    gap: 10px;
+  }
+  .h-item .h-alert {
+    display: inline-flex; align-items: center;
+    gap: 5px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11.5px; font-weight: 600;
+    letter-spacing: .04em;
     line-height: 1;
+    color: var(--t-secondary);
     font-feature-settings: 'tnum';
   }
-  .h-item .v-badge.ns-c { color: #1A1500; }
-  .h-item .v-badge.ns-na { background: var(--sunken); color: var(--t-tertiary); font-size: 14px; }
-  .h-item .v-word {
-    font-size: 14px; font-weight: 600;
-    letter-spacing: -.005em;
+  .h-item .h-alert .dot {
+    width: 16px; height: 16px;
+    border-radius: 5px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    /* Force white glyphs regardless of the chip's own text color
+       (info icon uses stroke="currentColor" — without this, blue-on-blue). */
+    color: #fff;
   }
-  .h-item.score-a .v-word { color: var(--ns-a-text); }
-  .h-item.score-b .v-word { color: var(--ns-b-text); }
-  .h-item.score-c .v-word { color: var(--ns-c-text); }
-  .h-item.score-d .v-word { color: var(--ns-d-text); }
-  .h-item.score-e .v-word { color: var(--ns-e-text); }
-  .h-item.score-na .v-word { color: var(--t-secondary); }
-  .h-item .h-date {
-    font-size: 11px;
-    color: var(--t-tertiary);
-    font-family: 'Geist Mono', monospace;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-    margin-top: 4px;
-  }
+  .h-item .h-alert .dot svg { width: 11px; height: 11px; }
+  .h-item .h-alert.danger .dot { background: var(--alert-critical); }
+  .h-item .h-alert.warn   .dot { background: var(--alert-warning); }
+  .h-item .h-alert.info   .dot { background: var(--alert-info); }
+  .h-item .h-alert.danger { color: var(--alert-critical-text); }
+  .h-item .h-alert.warn   { color: var(--alert-warning-text); }
+  .h-item .h-alert.info   { color: var(--alert-info-text); }
   .h-chev {
     color: var(--t-tertiary);
     flex-shrink: 0;
@@ -2239,26 +2420,21 @@
     border-radius: 999px;
     margin: 0 auto;
   }
-  .cs-header {
-    flex-shrink: 0;
-    padding: 4px 20px 12px;
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .cs-header .cs-title {
-    font-size: 11px; font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .14em;
-    font-family: 'Geist Mono', monospace;
-    color: var(--t-tertiary);
-  }
+  /* Close button floats over the cam-sheet's top-right corner so the
+     product-hero starts immediately under the grip — no header row taking
+     vertical real-estate. The product-hero's col gets right-padding inside
+     cs-body so the name doesn't slide under the button. */
   .cs-close {
-    width: 32px; height: 32px; border-radius: 999px;
+    position: absolute;
+    top: 12px; right: 14px; z-index: 3;
+    width: 30px; height: 30px; border-radius: 999px;
     background: var(--sunken); color: var(--t-primary);
     border: 0; cursor: pointer; display: grid; place-items: center;
     transition: background-color 120ms;
   }
   .cs-close:hover { background: var(--b-hairline); }
   .cs-close svg { width: 14px; height: 14px; }
+  #cs-body .product-hero .col { padding-right: 38px; }
 
   .cs-body {
     flex: 1;
@@ -2440,6 +2616,10 @@
     <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 3 L14.5 9.2 L21 9.8 L16 14 L17.7 20.5 L12 17 L6.3 20.5 L8 14 L3 9.8 L9.5 9.2 Z"/>
     </symbol>
+    <symbol id="i-crown" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+      <path d="M3 7 L7.5 11 L12 5 L16.5 11 L21 7 L19.2 18 H4.8 Z"/>
+      <line x1="4.8" y1="20" x2="19.2" y2="20" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
     <symbol id="i-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="9"/>
       <path d="M9.5 9.5 a2.5 2.5 0 0 1 5 0 c0 1.5-2.5 2-2.5 4"/>
@@ -2461,6 +2641,10 @@
       <path d="M5 19 C5 11 12 4 20 4 C20 12 13 19 5 19 Z"/>
       <line x1="5" y1="19" x2="13" y2="11"/>
     </symbol>
+    <symbol id="i-product-ph" viewBox="0 0 24 24" fill="currentColor">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M8 6C6.34315 6 5 7.34315 5 9C5 10.6569 6.34315 12 8 12C9.65686 12 11 10.6569 11 9C11 7.34315 9.65686 6 8 6Z"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M17.2413 2H6.7587C5.95374 1.99999 5.28937 1.99998 4.74818 2.04419C4.18608 2.09012 3.66937 2.18868 3.18404 2.43598C2.43139 2.81947 1.81947 3.43139 1.43598 4.18404C1.18868 4.66937 1.09012 5.18608 1.04419 5.74818C0.999978 6.28937 0.999988 6.95372 1 7.75869V16.2413C0.999988 17.0463 0.999978 17.7106 1.04419 18.2518C1.09012 18.8139 1.18868 19.3306 1.43598 19.816C1.81947 20.5686 2.43139 21.1805 3.18404 21.564C3.66937 21.8113 4.18608 21.9099 4.74818 21.9558C4.86687 21.9655 4.99148 21.9731 5.1222 21.979C5.12976 21.9797 5.13706 21.9804 5.14408 21.981C5.35805 21.9999 5.62381 21.9999 5.89419 21.9999L6.4005 21.9998C6.51667 22 6.63604 22 6.75868 22H17.2413C17.363 22 17.4815 22 17.5968 21.9999H18.1059C18.3763 21.9999 18.6421 21.9999 18.856 21.981C18.8631 21.9803 18.8704 21.9797 18.878 21.979C19.0087 21.9731 19.1332 21.9655 19.2518 21.9558C19.8139 21.9099 20.3306 21.8113 20.816 21.564C21.5686 21.1805 22.1805 20.5686 22.564 19.816C22.8113 19.3306 22.9099 18.8139 22.9558 18.2518C23 17.7106 23 17.0463 23 16.2413V15.0008V14.9989V7.75868C23 6.95372 23 6.28937 22.9558 5.74818C22.9099 5.18608 22.8113 4.66937 22.564 4.18404C22.1805 3.43139 21.5686 2.81947 20.816 2.43598C20.3306 2.18868 19.8139 2.09012 19.2518 2.04419C18.7106 1.99998 18.0463 1.99999 17.2413 2ZM21 12.5856V7.8C21 6.94342 20.9992 6.36113 20.9624 5.91104C20.9266 5.47262 20.8617 5.24842 20.782 5.09202C20.5903 4.7157 20.2843 4.40973 19.908 4.21799C19.7516 4.1383 19.5274 4.07337 19.089 4.03755C18.6389 4.00078 18.0566 4 17.2 4H6.8C5.94342 4 5.36113 4.00078 4.91104 4.03755C4.47262 4.07337 4.24842 4.1383 4.09202 4.21799C3.7157 4.40973 3.40973 4.7157 3.21799 5.09202C3.1383 5.24842 3.07337 5.47262 3.03755 5.91104C3.00078 6.36113 3 6.94342 3 7.8V16.2C3 17.0566 3.00078 17.6389 3.03755 18.089C3.07337 18.5274 3.1383 18.7516 3.21799 18.908C3.38624 19.2382 3.64243 19.5142 3.95693 19.7065C4.01521 19.6184 4.07265 19.548 4.11525 19.4971C4.25313 19.3324 4.44106 19.1446 4.63226 18.9534L10.1841 13.4016C10.3626 13.2231 10.5364 13.0493 10.6956 12.9141C10.8704 12.7657 11.0923 12.6061 11.382 12.5119C11.7837 12.3814 12.2164 12.3814 12.6181 12.5119C12.9078 12.6061 13.1297 12.7657 13.3045 12.9141C13.4638 13.0492 13.6375 13.2231 13.816 13.4015L14 13.5856L16.1841 11.4016C16.3625 11.2231 16.5363 11.0493 16.6955 10.9141C16.8704 10.7657 17.0922 10.6061 17.382 10.5119C17.7837 10.3814 18.2163 10.3814 18.618 10.5119C18.9077 10.6061 19.1296 10.7657 19.3045 10.9141C19.4637 11.0493 19.6375 11.2231 19.8159 11.4016L21 12.5856Z"/>
+    </symbol>
     <!-- 16x16 alert glyphs -->
     <symbol id="g-allergen" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M8 1.8 L14.6 13.5 H1.4 Z"/>
@@ -2478,6 +2662,11 @@
     </symbol>
     <symbol id="g-ok" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 8.5 L6.5 12 L13 4.5"/>
+    </symbol>
+    <symbol id="g-info" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="8" cy="8" r="6"/>
+      <line x1="8" y1="7.5" x2="8" y2="11"/>
+      <circle cx="8" cy="5" r="0.85" fill="#fff" stroke="none"/>
     </symbol>
     <symbol id="g-warn" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <line x1="8" y1="3.5" x2="8" y2="9"/>
@@ -2524,6 +2713,8 @@
         <button class="pill v2-only" id="demo-history">Open History tab</button>
         <button class="pill" id="demo-empty-profile">Empty profile</button>
         <button class="pill" id="demo-fill-profile">Fill profile</button>
+        <button class="pill" id="demo-plan-premium">Plan: Premium</button>
+        <button class="pill" id="demo-plan-free">Plan: Free</button>
       </div>
     </div>
 
@@ -2559,6 +2750,8 @@
           <div class="st-states">
             <button class="pill st-state" data-state="empty-profile">Empty</button>
             <button class="pill st-state" data-state="fill-profile">Filled</button>
+            <button class="pill st-state" data-state="plan-premium">Premium</button>
+            <button class="pill st-state" data-state="plan-free">Free</button>
           </div>
         </div>
         <div class="st-group">
@@ -2580,13 +2773,6 @@
 
   <!-- Device -->
   <div class="device-wrap">
-    <div class="proto-control" id="proto-chat-mode" aria-label="Prototype · Chat mode">
-      <span class="label">Prototype · Chat mode</span>
-      <div class="chat-mode-toggle" id="chat-mode-toggle">
-        <button data-mode="a" class="active">A · with product</button>
-        <button data-mode="b">B · no product</button>
-      </div>
-    </div>
     <div class="device">
       <div class="device-screen">
 
@@ -2670,7 +2856,7 @@
             </div>
             <div class="es-history">
               <button class="es-item" onclick="quickOpen('bad')">
-                <div class="es-photo" data-tone="amber">N</div>
+                <div class="es-photo" data-tone="amber"><svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg></div>
                 <div class="es-meta">
                   <div class="es-name">Nutella</div>
                   <div class="es-sub">Ferrero · Yesterday</div>
@@ -2678,7 +2864,7 @@
                 <div class="ns-mini ns-e">E</div>
               </button>
               <button class="es-item" onclick="quickOpen('good')">
-                <div class="es-photo" data-tone="green">H</div>
+                <div class="es-photo" data-tone="green"><svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg></div>
                 <div class="es-meta">
                   <div class="es-name">Hazelnut Butter</div>
                   <div class="es-sub">Whole Earth · Apr 24</div>
@@ -2686,7 +2872,7 @@
                 <div class="ns-mini ns-a">A</div>
               </button>
               <button class="es-item" onclick="quickOpen('na')">
-                <div class="es-photo" data-tone="cream">L</div>
+                <div class="es-photo" data-tone="cream"><svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg></div>
                 <div class="es-meta">
                   <div class="es-name">Altai Honey</div>
                   <div class="es-sub">Local farm · Apr 22</div>
@@ -2724,12 +2910,9 @@
             <div class="cs-grip-area" id="cs-grip-area" title="Swipe up for full report">
               <div class="cs-grip"></div>
             </div>
-            <div class="cs-header">
-              <div class="cs-title">Scan result</div>
-              <button class="cs-close" id="cs-close" aria-label="Close">
-                <svg><use href="#i-close"/></svg>
-              </button>
-            </div>
+            <button class="cs-close" id="cs-close" aria-label="Close">
+              <svg><use href="#i-close"/></svg>
+            </button>
             <div class="cs-body" id="cs-body">
               <!-- Populated by JS on each scan -->
             </div>
@@ -2797,7 +2980,8 @@
               <div class="info">
                 <div class="name">Yuri K.</div>
                 <div class="email">agaewski10@gmail.com</div>
-                <span class="badge">Pro</span>
+                <span class="badge premium" aria-label="Premium subscription"><svg><use href="#i-crown"/></svg>Premium</span>
+                <button type="button" class="badge free" onclick="goTo('paywall')" aria-label="Upgrade to Premium">Free</button>
               </div>
             </div>
 
@@ -2919,8 +3103,8 @@
                   <span class="lead">Used for local rules and availability.</span>
                 </div>
                 <div class="pf-card row-list">
-                  <div class="row">
-                    <span class="lbl"><span class="ico flag" aria-hidden="true"></span>United States</span>
+                  <div class="row" onclick="openRegionPicker()">
+                    <span class="lbl"><span class="ico flag" aria-hidden="true"></span><span id="region-label">United States</span></span>
                     <span class="val">Change <svg><use href="#i-chev-r"/></svg></span>
                   </div>
                 </div>
@@ -2944,7 +3128,6 @@
                   <span class="lead">Subscription, legal, and sign-out.</span>
                 </div>
                 <div class="pf-card row-list">
-                  <div class="row"><span class="lbl"><span class="ico"><svg><use href="#i-bell"/></svg></span>Notifications</span><span class="val"><svg><use href="#i-chev-r"/></svg></span></div>
                   <div class="row"><span class="lbl"><span class="ico"><svg><use href="#i-star"/></svg></span>Subscription management</span><span class="val"><svg><use href="#i-chev-r"/></svg></span></div>
                   <div class="row"><span class="lbl"><span class="ico"><svg><use href="#i-chat"/></svg></span>Contact us</span><span class="val"><svg><use href="#i-chev-r"/></svg></span></div>
                   <div class="row"><span class="lbl"><span class="ico"><svg><use href="#i-info"/></svg></span>Terms of Use</span><span class="val"><svg><use href="#i-chev-r"/></svg></span></div>
@@ -2995,6 +3178,36 @@
               </button>
             </div>
             <div class="sheet-body" id="pe-body"></div>
+          </div>
+        </section>
+
+        <!-- ==== Region picker sheet — opens from the Region row ==== -->
+        <section class="screen" id="screen-region">
+          <div class="sheet">
+            <div class="sheet-handle"></div>
+            <div class="sheet-header">
+              <div class="sheet-title">REGION</div>
+              <button class="sheet-close" onclick="goTo('profile')" aria-label="Done">
+                <svg><use href="#i-close"/></svg>
+              </button>
+            </div>
+            <div class="sheet-body" id="region-body"></div>
+          </div>
+        </section>
+
+        <!-- ==== Paywall sheet — opens when a Free user taps the Free badge ==== -->
+        <section class="screen" id="screen-paywall">
+          <div class="sheet">
+            <div class="sheet-handle"></div>
+            <div class="sheet-header">
+              <div class="sheet-title">PAYWALL</div>
+              <button class="sheet-close" onclick="goTo('profile')" aria-label="Close">
+                <svg><use href="#i-close"/></svg>
+              </button>
+            </div>
+            <div class="sheet-body">
+              <div class="paywall-placeholder">Paywall</div>
+            </div>
           </div>
         </section>
 
@@ -3066,7 +3279,7 @@
             </div>
 
             <div class="pinned-card" id="pinned-card" onclick="goTo('report')">
-              <div class="photo" id="pin-photo" data-tone="amber">N</div>
+              <div class="photo" id="pin-photo" data-tone="amber"><svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg></div>
               <div class="info">
                 <div class="name" id="pin-name">Nutella</div>
                 <div class="brand" id="pin-brand">Ferrero · 350 g</div>
@@ -3152,7 +3365,7 @@
         <li>Tap a question chip → lands in AI chat with context</li>
         <li>Toggle Mode A ↔ B → product context disappears</li>
         <li>In Profile, tap chips → section counters update</li>
-        <li>«No score» → shows «Insufficient data» placeholder</li>
+        <li>«No score» (vitamin) → only hero photo + name; everything else hides</li>
       </ul>
     </div>
 
@@ -3165,6 +3378,52 @@
         <li>Profile is optional → CTA if empty</li>
       </ul>
     </div>
+
+    <div class="panel">
+      <h3>API → UI mapping</h3>
+      <p style="color: var(--t-secondary); font-size: 12px; margin: 0 0 12px;">Open Food Facts fields, in the order they appear in the report.</p>
+
+      <p style="color: var(--t-primary); font-size: 12px; margin: 0 0 4px;"><b>1 · Product hero</b></p>
+      <ul style="margin-bottom: 12px;">
+        <li><b>product_name</b> → title</li>
+        <li><b>image_url</b> → photo (falls back to monogram)</li>
+        <li><b>nutrition_grades</b> → score badge (A–E; "—" if NA / not-applicable)</li>
+      </ul>
+
+      <p style="color: var(--t-primary); font-size: 12px; margin: 0 0 4px;"><b>2 · Personal alerts</b></p>
+      <p style="color: var(--t-secondary); font-size: 12px; margin: 0 0 6px;">Built by matching API data against the user's profile (allergies, goals, health risks). Each alert is one API field <i>matched with</i> one profile rule.</p>
+      <ul style="margin-bottom: 6px;">
+        <li>API <b>allergens_tags</b> matches the user's allergy list → <span style="color:#E63E11">danger</span> alert (e.g. "Hazelnuts" for tree-nut allergy)</li>
+        <li>API <b>traces_tags</b> matches the user's allergy list → <span style="color:#A8741A">warn</span> alert ("may contain")</li>
+        <li>A nutrient (<b>sugars_100g / saturated-fat_100g / salt_100g</b>) is above its threshold <i>and</i> the user has a related goal (weight loss, diabetes, heart) → severity by level</li>
+        <li>Product has additives (<b>additives_tags</b> not empty) <i>or</i> <b>nova_group</b> ≥ 4, <i>and</i> the user wants to avoid ultra-processed food → <span style="color:#5B7FFF">info</span> alert</li>
+        <li>Nothing to match (no allergens, no nutriments) → optional generic <span style="color:#5B7FFF">info</span> alert ("No nutritional data — refer to label", as in the No-score demo)</li>
+      </ul>
+      <p style="color: var(--t-secondary); font-size: 11px; margin: 0 0 12px; font-style: italic;">In this prototype alerts are hardcoded per product to simulate the matched output. In production, derived per request from user profile + API response.</p>
+
+      <p style="color: var(--t-primary); font-size: 12px; margin: 0 0 4px;"><b>3 · Breakdown rows</b></p>
+      <ul style="margin-bottom: 12px;">
+        <li><b>nutriments.sugars_100g / saturated-fat_100g / salt_100g</b> → Sugar / Sat fat / Salt rows. API gives the number only; Low/Med/High and the explanation copy are computed in the prototype from static EU/WHO thresholds — needs an owner (PM, nutritionist, or backend).</li>
+        <li><b>nova_group</b> → Processing row (1–4). API gives the digit; description ("Ultra-processed…") is static copy.</li>
+        <li><b>additives_tags[]</b> → Additives row (empty array → "None").</li>
+      </ul>
+
+      <p style="color: var(--t-primary); font-size: 12px; margin: 0 0 4px;"><b>4 · Ingredients</b></p>
+      <ul style="margin-bottom: 12px;">
+        <li><b>ingredients_text_en</b> → split by commas; tokens highlighted by alert match (allergens get a coloured background).</li>
+      </ul>
+
+      <p style="color: var(--t-primary); font-size: 12px; margin: 0 0 4px;"><b>Missing-data rule</b></p>
+      <p style="color: var(--t-secondary); font-size: 12px; margin: 0 0 12px;">If a field is absent in the API response, the corresponding row or section is hidden entirely — no "no data" placeholders.</p>
+
+      <p style="color: var(--t-primary); font-size: 12px; margin: 0 0 4px;"><b>Demo data — fetched 2026-04-30</b></p>
+      <ul style="font-size: 11px; line-height: 1.6;">
+        <li><b>Bad</b> · Nutella · <code>3017624010701</code> · completeness <b>0.76</b> — full payload, but <code>nova_group</code> missing (Processing row hides)</li>
+        <li><b>Good</b> · Ain Saiss water 50cl · <code>6111128000088</code> · completeness <b>0.58</b> — Score A, NOVA 1, but no ingredients, no allergens, no traces, no fiber</li>
+        <li><b>No score</b> · Centrum Multivitamine · <code>5054563295644</code> · completeness <b>0.36</b> — <code>nutrition_grades = "not-applicable"</code>, only name + image, every other section hides</li>
+      </ul>
+      <p style="color: var(--t-secondary); font-size: 11px; margin: 8px 0 0;">Reflects OFF reality — only <code>code</code> + <code>status</code> are guaranteed; everything else may be missing.</p>
+    </div>
   </aside>
 
 </div>
@@ -3174,7 +3433,9 @@
    PROTOTYPE STATE & WIRING
 ========================================================= */
 const PRODUCTS = {
-  // OFF barcode 3017624010701 — fetched 2026-04-28
+  // OFF: https://world.openfoodfacts.org/api/v2/product/3017624010701
+  // Fetched 2026-04-30 — completeness 0.7625. Real OFF gaps: nova_group missing,
+  // additives_tags returned empty by API even though product contains lecithin emulsifier.
   bad: {
     name: 'Nutella',
     brand: 'Ferrero · 400 g',
@@ -3190,111 +3451,127 @@ const PRODUCTS = {
     alertDesc: 'Tree nuts are on your allergy list.',
     alertClass: 'danger',
     aiPreview: 'Skip it. The hazelnut allergen alone is a hard no for you — but I can suggest a swap that fits your weight goal.',
+    analysis: "**Nutella** is a sweet spread built mostly around **sugar** and **palm oil** — sugar is the first ingredient by weight, and saturated fat sits at **10.6 g per 100 g**. The recipe also contains **hazelnuts**, which is on your **allergen list**, so this one is a hard no for daily use. Even setting allergens aside, the **56 g of sugar per 100 g** works directly against your **weight-loss goal** and pushes a sharp blood-glucose response. Treat it as an occasional indulgence at best — and there are cleaner hazelnut spreads worth comparing below.",
     alerts: [
       {
         ingredient: 'Hazelnuts',
         severity: 'danger',
         glyph: 'g-allergen',
-        summary: 'Matches your tree-nut allergy.',
-        tags: ['Tree-nut allergy'],
+        reasons: [
+          { tag: 'Tree-nut allergy', desc: 'Direct match — this product contains tree nuts.' },
+        ],
       },
       {
         ingredient: 'Sugar',
         severity: 'danger',
         glyph: 'g-goal',
-        summary: '56.3g per 100g — well above the WHO limit of 25g per day.',
-        tags: ['Weight loss goal', 'Diabetes risk', 'Heart health'],
+        metric: '56.3 g / 100 g',
+        reasons: [
+          { tag: 'Weight loss goal', desc: 'Calorie-dense and easy to overconsume; works against a deficit.' },
+          { tag: 'Diabetes risk',   desc: 'Sharp blood-glucose response raises long-term risk.' },
+          { tag: 'Heart health',    desc: 'Excess added sugar is linked to higher blood pressure.' },
+        ],
       },
       {
         ingredient: 'Palm oil',
         severity: 'warn',
         glyph: 'g-warn',
-        summary: 'Primary fat source — 10.6g saturated fat per 100g.',
-        tags: ['Saturated fat', 'Weight loss goal'],
+        metric: '10.6 g sat. fat / 100 g',
+        reasons: [
+          { tag: 'Saturated fat',    desc: 'High in saturated fat, which raises LDL cholesterol.' },
+          { tag: 'Weight loss goal', desc: 'Energy-dense fat with little satiety benefit.' },
+        ],
       },
       {
         ingredient: 'Emulsifier',
         severity: 'info',
         glyph: 'g-child',
-        summary: 'Flagged in toddler feeding guidelines.',
-        tags: ['Children 0–3', 'Ultra-processed'],
+        reasons: [
+          { tag: 'Children 0–3',    desc: 'Discouraged in toddler feeding guidelines.' },
+          { tag: 'Ultra-processed', desc: 'Industrial additive typical of NOVA group 4 foods.' },
+        ],
       },
     ],
-    nutriments: { sugars_100g: 56.3, 'saturated-fat_100g': 10.6, salt_100g: 0.1075, fiber_100g: null },
-    nova_group: null,
+    nutriments: { sugars_100g: 56.3, 'saturated-fat_100g': 10.6, salt_100g: 0.1075, proteins_100g: 6.3, fat_100g: 30.9, carbohydrates_100g: 57.5, 'energy-kcal_100g': 539 },
+    // nova_group absent in OFF response (server couldn't compute) — Breakdown row hidden.
     additives_tags: [],
     ingredients_text_en: 'sugar, palm oil, hazelnuts, skimmed milk powder, fat reduced cocoa, emulsifier, vanillin.',
     allergens_tags: ['en:nuts'],
     traces_tags: ['en:milk', 'en:nuts', 'en:soybeans'],
   },
-  // OFF barcode 0894700010137 — fetched 2026-04-28
+  // OFF: https://world.openfoodfacts.org/api/v2/product/6111128000088
+  // Fetched 2026-04-30 — completeness 0.575. Partial-data example: Nutri-Score A
+  // but ingredients_text_en absent (water has none), allergens & traces empty,
+  // all nutriments are zero (real volunteer-entered data for water), no fiber.
   good: {
-    name: 'Greek Yogurt Nonfat Plain',
-    brand: 'Chobani',
-    producer: 'Chobani',
-    monogram: 'C',
+    name: 'Ain Saiss 50cl',
+    brand: 'Aïn Saiss · 0.5 L',
+    producer: 'Danone Maroc',
+    monogram: 'A',
     tone: 'green',
+    imgSrc: 'https://images.openfoodfacts.org/images/products/611/112/800/0088/front_fr.34.400.jpg',
     ns: 'A',
     verdict: 'Excellent',
-    sub: 'Minimally processed, high protein, no additives.',
+    sub: 'Bottled mineral water — Nutri-Score A.',
     alertGlyph: 'g-ok',
     alertTitle: 'Clear for your profile',
     alertDesc: 'Nothing flagged for your profile.',
     alertClass: 'success',
-    aiPreview: 'Solid pick. High protein, clean ingredients, NOVA 1 — fits your weight goal.',
+    aiPreview: 'Plain mineral water. Nothing to flag for your profile.',
+    analysis: "**Aïn Saiss** is **bottled mineral water** — Nutri-Score **A**, NOVA **1**, and zero added anything. There is **no sugar, no salt, no fat, and no additives**, just water with the natural mineral profile from the source. Nothing on it conflicts with your **allergens** or your **weight-loss goal**, and it's a strong everyday hydration choice. About the only thing worth a second look is the single-use plastic if that matters to you.",
     alerts: [
       {
-        ingredient: 'No matches',
+        ingredient: 'All clear',
         severity: 'success',
         glyph: 'g-ok',
-        summary: 'No added sugar, no additives, NOVA 1 — clears every flag in your profile.',
-        tags: ['Weight loss goal', 'Heart health'],
+        reasons: [
+          { tag: 'Hydration', desc: 'No sugar, salt, or additives — just water with natural minerals.' },
+        ],
       },
     ],
-    nutriments: { sugars_100g: 6, 'saturated-fat_100g': 0, salt_100g: 0.1625, fiber_100g: 0, proteins_100g: 16 },
+    nutriments: { sugars_100g: 0, 'saturated-fat_100g': 0, salt_100g: 0, proteins_100g: 0, 'energy-kcal_100g': 0 },
     nova_group: 1,
     additives_tags: [],
-    ingredients_text_en: 'cultured nonfat milk, S. Thermophilus, L. Bulgaricus, L. Acidophilus, Bifidus, L. Casei, L. Rhamnosus',
-    allergens_tags: ['en:milk'],
-    traces_tags: [],
-  },
-  // Not in Open Food Facts — all nutriment fields null (demonstrates no-data state)
-  na: {
-    name: 'Mountain Apiary Raw Wildflower Honey Jar',
-    brand: 'Mountain Apiary · 500 g',
-    producer: 'Local Farm Co.',
-    monogram: 'L',
-    tone: 'cream',
-    ns: 'NA',
-    verdict: 'Insufficient data',
-    sub: 'Not found in our database.',
-    alertGlyph: 'g-warn',
-    alertTitle: 'Score unavailable',
-    alertDesc: 'Your alerts were checked against the label.',
-    alertClass: 'warn',
-    aiPreview: 'Not in our database — ask me about the ingredients or your goals.',
-    alerts: [
-      {
-        ingredient: 'Honey',
-        severity: 'warn',
-        glyph: 'g-goal',
-        summary: '~80 g sugar per 100 g — natural fructose, but high against your weight goal.',
-        tags: ['Weight loss goal', 'Diabetes risk'],
-      },
-      {
-        ingredient: 'Raw honey',
-        severity: 'info',
-        glyph: 'g-child',
-        summary: 'Unsuitable for infants under 12 months — botulism risk.',
-        tags: ['Children 0–1'],
-      },
-    ],
-    nutriments: null,
-    nova_group: null,
-    additives_tags: null,
-    ingredients_text_en: 'raw wildflower honey.',
+    // ingredients_text_en absent (OFF returned no English ingredients for this water).
     allergens_tags: [],
     traces_tags: [],
+  },
+  // OFF: https://world.openfoodfacts.org/api/v2/product/5054563295644
+  // Fetched 2026-04-30 — completeness 0.3625. Minimum-data example:
+  // nutrition_grades = "not-applicable" (supplements aren't Nutri-Scored),
+  // no nutriments, no NOVA, no ingredients, no allergens — only name + image.
+  na: {
+    name: 'Centrum Multivitamine Men 50+ Tabletten',
+    brand: 'Centrum · 60 tablets',
+    producer: 'Centrum',
+    monogram: 'C',
+    tone: 'cream',
+    imgSrc: 'https://images.openfoodfacts.org/images/products/505/456/329/5644/front_nl.3.400.jpg',
+    ns: 'NA',
+    verdict: 'Score not applicable',
+    sub: 'Dietary supplement — not graded by Nutri-Score.',
+    alertGlyph: 'g-warn',
+    alertTitle: 'Supplement, not food',
+    alertDesc: 'OFF has no nutritional data for this product.',
+    alertClass: 'info',
+    aiPreview: 'Multivitamin tablet — no Nutri-Score, no nutritional breakdown available.',
+    analysis: "**Centrum Multivitamine Men 50+** is a **dietary supplement**, not a food, so the Nutri-Score doesn't apply and there's no nutritional breakdown to grade. Open Food Facts has only the **name and image** for this product — ingredients, allergens, and dosage are not in the database. For anything you'd actually act on — interactions with medication, dosing, or whether it fits your goals — go to the **printed label** or check with your physician. I can't say more than that from the data available.",
+    // Discussion item for the team: when API returns minimal data, do we leave the
+    // report empty, or surface a generic info-alert? Showing the alternative below.
+    // Set to alerts: [] to compare the empty-state version.
+    alerts: [
+      {
+        ingredient: 'No nutritional data',
+        severity: 'info',
+        glyph: 'g-warn',
+        reasons: [
+          { tag: 'Source', desc: 'Open Food Facts has only the name and image for this product.' },
+          { tag: 'What to do', desc: 'Refer to the printed label for ingredients, allergens, and dosage.' },
+        ],
+      },
+    ],
+    // No nutriments, no nova_group, no additives_tags, no ingredients_text_en,
+    // no allergens_tags, no traces_tags — Breakdown and Ingredients sections hide.
   }
 };
 
@@ -3307,7 +3584,15 @@ let state = {
   product: PRODUCTS.bad,
   emptyMode: 'clean',
   history: [],
+  plan: 'premium',
 };
+
+/* ====== Plan (free / premium) ====== */
+function setPlan(p) {
+  state.plan = p;
+  document.body.setAttribute('data-plan', p);
+}
+document.body.setAttribute('data-plan', state.plan);
 
 /* ====== Version (v1 / v2) ====== */
 function setVersion(v) {
@@ -3398,7 +3683,7 @@ function makeMiniCard(kind) {
   const nsText = p.ns === 'NA' ? '—' : p.ns;
   card.innerHTML = `
     <div class="mc-header">
-      <div class="mc-photo" data-tone="${p.tone}">${p.monogram}</div>
+      <div class="mc-photo" data-tone="${p.tone}"><svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg></div>
       <div class="mc-meta">
         <div class="name">${p.name}</div>
         <div class="brand">${p.brand}</div>
@@ -3483,21 +3768,37 @@ function renderHistory() {
   }
   empty.style.display = 'none';
   count.textContent = state.history.length + (state.history.length === 1 ? ' scan' : ' scans');
+  const SEVERITY_ORDER = ['danger', 'warn', 'info'];
+  const SEVERITY_GLYPH = { danger: 'g-allergen', warn: 'g-warn', info: 'g-info' };
   state.history.forEach((item, idx) => {
-    const nsClass = item.ns === 'NA' ? 'ns-na' : 'ns-' + item.ns.toLowerCase();
     const scoreClass = item.ns === 'NA' ? 'score-na' : 'score-' + item.ns.toLowerCase();
-    const nsText = item.ns === 'NA' ? '—' : item.ns;
+
+    // Verdict-mini matches the report: shown only when there's a real Nutri-Score.
+    const verdictMiniHtml = item.ns === 'NA' ? '' : `
+        <div class="verdict-mini">
+          <span class="ns">${item.ns}</span>
+          <span>${escapeHtml(item.verdict)}</span>
+        </div>`;
+
+    const productAlerts = (PRODUCTS[item.kind] && PRODUCTS[item.kind].alerts) || [];
+    const counts = productAlerts.reduce((acc, a) => {
+      acc[a.severity] = (acc[a.severity] || 0) + 1;
+      return acc;
+    }, {});
+    const chipsHtml = SEVERITY_ORDER
+      .filter(sev => counts[sev])
+      .map(sev =>
+        `<span class="h-alert ${sev}"><span class="dot"><svg><use href="#${SEVERITY_GLYPH[sev]}"/></svg></span>${counts[sev]}</span>`
+      ).join('');
+    const alertsHtml = chipsHtml ? `<div class="h-alerts">${chipsHtml}</div>` : '';
+
     const btn = document.createElement('button');
     btn.className = 'h-item ' + scoreClass;
     btn.innerHTML = `
-      <div class="photo" data-tone="${item.tone}">${item.monogram}</div>
+      <div class="photo" data-tone="${item.tone}"><svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg></div>
       <div class="info">
         <div class="name">${item.name}</div>
-        <div class="verdict-line">
-          <div class="v-badge ${nsClass}">${nsText}</div>
-          <span class="v-word">${item.verdict}</span>
-        </div>
-        <div class="h-date">${item.when} · ${item.brand}</div>
+        <div class="h-meta">${verdictMiniHtml}${alertsHtml}</div>
       </div>
       <span class="h-chev"><svg><use href="#i-chev-r"/></svg></span>
     `;
@@ -3516,16 +3817,21 @@ function escapeHtml(s) {
 function renderAlertsHtml(alerts) {
   if (!alerts || !alerts.length) return '';
   return alerts.map(a => {
-    const tagsHtml = (a.tags && a.tags.length)
-      ? `<div class="alert-tags">${a.tags.map(t => `<span class="alert-tag">${escapeHtml(t)}</span>`).join('')}</div>`
+    const metricHtml = a.metric
+      ? `<span class="alert-metric">${escapeHtml(a.metric)}</span>`
+      : '';
+    const reasonsHtml = (a.reasons && a.reasons.length)
+      ? `<ul class="alert-reasons">${a.reasons.map(r =>
+          `<li><span class="reason-tag">${escapeHtml(r.tag)}</span> — ${escapeHtml(r.desc)}</li>`
+        ).join('')}</ul>`
       : '';
     return `
       <div class="alert-item ${a.severity}">
         <span class="ico"><svg><use href="#${a.glyph}"/></svg></span>
         <div class="body">
           <div class="title">${escapeHtml(a.ingredient)}</div>
-          <div class="desc">${escapeHtml(a.summary)}</div>
-          ${tagsHtml}
+          ${metricHtml}
+          ${reasonsHtml}
         </div>
       </div>`;
   }).join('');
@@ -3566,13 +3872,8 @@ function nutriLevel(val, lo, hi) {
 const LEVEL_LABEL = { low: 'Low', med: 'Med', high: 'High' };
 
 function breakdownRow(label, level, pill, detail) {
-  if (level === null) {
-    return `
-      <div class="accordion-row no-data">
-        <span class="label">${label}</span>
-        <span class="level-pill na">No data</span>
-      </div>`;
-  }
+  // No-data rows are dropped entirely — we don't render a placeholder.
+  if (level === null) return '';
   return `
     <div class="accordion-row" onclick="this.classList.toggle('open')">
       <span class="label">${escapeHtml(label)}</span>
@@ -3588,7 +3889,7 @@ function buildBreakdown(p) {
   const satFat = n['saturated-fat_100g'] ?? null;
   const salt   = n.salt_100g ?? null;
   const nova   = p.nova_group ?? null;
-  const adds   = p.additives_tags || [];
+  const adds   = p.additives_tags;
 
   const sLvl = nutriLevel(sugars, 5, 22.5);
   const sDetail = sLvl === 'high' ? `${sugars}g per 100g — well above the WHO limit of 25g per day.`
@@ -3601,33 +3902,36 @@ function buildBreakdown(p) {
     3: 'Processed — contains added salt, sugar or fat.',
     4: 'Ultra-processed — contains additives, emulsifiers or industrial ingredients.' }[nova] || '';
 
-  const aLvl = adds.length === 0 ? 'low' : adds.length <= 2 ? 'med' : 'high';
-  const aDetail = adds.length === 0 ? 'No additives detected.'
-    : adds.slice(0, 3).map(t => t.replace('en:', '').toUpperCase()).join(', ')
-      + (adds.length > 3 ? ` + ${adds.length - 3} more` : '');
+  // additives_tags missing from API → hide row.
+  // additives_tags present but empty → show "None" (volunteer confirmed no additives).
+  const aLvl = adds == null ? null : adds.length === 0 ? 'low' : adds.length <= 2 ? 'med' : 'high';
+  const aDetail = adds && adds.length
+    ? adds.slice(0, 3).map(t => t.replace('en:', '').toUpperCase()).join(', ')
+      + (adds.length > 3 ? ` + ${adds.length - 3} more` : '')
+    : 'No additives detected.';
 
   const sfLvl = nutriLevel(satFat, 1.5, 5);
   const sfDetail = sfLvl === 'high' ? `${satFat}g per 100g — exceeds the 5g per 100g threshold.`
     : sfLvl === 'med' ? `${satFat}g per 100g — moderate.`
-    : `${satFat !== null ? satFat + 'g' : '0g'} per 100g — low saturated fat.`;
+    : `${satFat}g per 100g — low saturated fat.`;
 
   const slLvl = nutriLevel(salt, 0.3, 1.5);
   const slDetail = slLvl === 'high' ? `${salt}g per 100g — high sodium content.`
     : slLvl === 'med' ? `${salt}g per 100g — moderate.`
-    : `${salt !== null ? salt + 'g' : '0g'} per 100g — within normal range.`;
+    : `${salt}g per 100g — within normal range.`;
 
   return [
-    breakdownRow('Sugar',            sLvl,    sLvl    ? `${LEVEL_LABEL[sLvl]} · ${sugars}g` : 'Low',      sDetail),
-    breakdownRow('Processing (NOVA)', novaLvl, `NOVA ${nova}`,                                             novaDetail),
-    breakdownRow('Additives',         aLvl,    adds.length === 0 ? 'None' : `${adds.length} found`,        aDetail),
-    breakdownRow('Saturated fat',     sfLvl,   sfLvl   ? `${LEVEL_LABEL[sfLvl]} · ${satFat}g` : 'Low',    sfDetail),
-    breakdownRow('Salt',              slLvl,   slLvl   ? `${LEVEL_LABEL[slLvl]} · ${salt}g` : 'Low',      slDetail),
+    breakdownRow('Sugar',            sLvl,    sLvl ? `${LEVEL_LABEL[sLvl]} · ${sugars}g` : '',            sDetail),
+    breakdownRow('Processing (NOVA)', novaLvl, novaLvl ? `NOVA ${nova}` : '',                              novaDetail),
+    breakdownRow('Additives',         aLvl,    aLvl ? (adds.length === 0 ? 'None' : `${adds.length} found`) : '',  aDetail),
+    breakdownRow('Saturated fat',     sfLvl,   sfLvl ? `${LEVEL_LABEL[sfLvl]} · ${satFat}g` : '',         sfDetail),
+    breakdownRow('Salt',              slLvl,   slLvl ? `${LEVEL_LABEL[slLvl]} · ${salt}g` : '',           slDetail),
   ].join('');
 }
 
 function buildIngredients(p) {
   const text = p.ingredients_text_en || '';
-  if (!text) return '<p style="color:var(--t-tertiary);font-size:14px;padding:4px 0">Ingredient list not available.</p>';
+  if (!text) return '';
   const alertIngs = (p.alerts || []).filter(a => a.severity === 'danger').map(a => a.ingredient.toLowerCase());
   const warnIngs  = (p.alerts || []).filter(a => a.severity === 'warn').map(a => a.ingredient.toLowerCase());
   const warnWords = ['palm oil', 'hydrogenated', 'high fructose'];
@@ -3636,8 +3940,176 @@ function buildIngredients(p) {
     const low = ing.toLowerCase();
     const isAlert = alertIngs.some(a => low.includes(a));
     const isWarn  = !isAlert && (warnIngs.some(w => low.includes(w)) || warnWords.some(w => low.includes(w)));
-    return `<span class="ing ${isAlert ? 'alert' : isWarn ? 'warn' : ''}">${escapeHtml(ing)}</span>`;
+    return `<span class="ing ${isAlert ? 'alert' : isWarn ? 'warn' : 'ok'}">${escapeHtml(ing)}</span>`;
   }).join('');
+}
+
+/* ====== AI Analysis — narrative paragraph that types itself in ======
+   Source string is per-product `analysis` with **bold** markdown for emphasis.
+   Future API returns the same shape; only the source swaps, not the renderer. */
+function parseAnalysis(str) {
+  if (!str) return [];
+  return str.split(/(\*\*[^*]+\*\*)/g)
+    .filter(Boolean)
+    .map(chunk => chunk.startsWith('**')
+      ? { text: chunk.slice(2, -2), bold: true }
+      : { text: chunk, bold: false });
+}
+
+function renderAnalysisBlock(p) {
+  if (!p || !p.analysis) return '';
+  const segments = parseAnalysis(p.analysis);
+  // Stash segments + product key on the node so the typewriter can pick them up
+  // without re-parsing or re-reading the data layer.
+  const productKey = (p.code || p.name || '').toString();
+  const segmentsAttr = escapeHtml(JSON.stringify(segments));
+  return `
+    <section class="ai-analysis ai-analysis--thinking"
+             data-analysis
+             data-analysis-key="${escapeHtml(productKey)}"
+             data-analysis-segments="${segmentsAttr}">
+      <div class="ai-analysis__head">
+        <span class="ai-analysis__orb" aria-hidden="true">
+          <svg width="16" height="16"><use href="#i-sparkle"/></svg>
+        </span>
+        <span class="ai-analysis__title">AI Analysis</span>
+      </div>
+      <div class="ai-analysis__body">
+        <span class="ai-analysis__dots" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span class="ai-analysis__text" data-analysis-text></span>
+        <span class="ai-analysis__cursor" data-analysis-cursor aria-hidden="true"></span>
+      </div>
+    </section>
+  `;
+}
+
+/* Tracks which products have already finished their typewriter so a repeat
+   visit shows the final text immediately — the AI "already said its piece." */
+const __analysisDone = new Set();
+
+function startAnalysisTypewriter(rootEl) {
+  if (!rootEl) return;
+  const node = rootEl.querySelector('[data-analysis]');
+  if (!node) return;
+
+  const textEl  = node.querySelector('[data-analysis-text]');
+  const cursorEl = node.querySelector('[data-analysis-cursor]');
+  if (!textEl || !cursorEl) return;
+
+  let segments = [];
+  try { segments = JSON.parse(node.getAttribute('data-analysis-segments') || '[]'); }
+  catch (_) { return; }
+  if (!segments.length) return;
+
+  const key = node.getAttribute('data-analysis-key') || '';
+  const reduceMotion = window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const fillFinal = () => {
+    textEl.innerHTML = '';
+    segments.forEach(seg => {
+      const span = document.createElement('span');
+      if (seg.bold) span.className = 'ai-analysis__bold';
+      span.textContent = seg.text;
+      textEl.appendChild(span);
+    });
+    node.classList.remove('ai-analysis--thinking');
+    cursorEl.classList.add('ai-analysis__cursor--gone');
+  };
+
+  // Already typed in a prior view of this product, or user prefers no motion → skip animation.
+  if (__analysisDone.has(key) || reduceMotion) {
+    fillFinal();
+    return;
+  }
+
+  let observer = null;
+  let started = false;
+  let done = false;
+  const timers = [];
+  const clearTimers = () => { while (timers.length) clearTimeout(timers.pop()); };
+
+  const skipToEnd = () => {
+    if (done) return;
+    done = true;
+    clearTimers();
+    fillFinal();
+    __analysisDone.add(key);
+  };
+
+  node.addEventListener('click', skipToEnd);
+
+  const run = () => {
+    if (started || done) return;
+    started = true;
+
+    // Pre-roll: 600ms of "thinking" dots, then start typing.
+    timers.push(setTimeout(() => {
+      if (done) return;
+      node.classList.remove('ai-analysis--thinking');
+      typeNextSegment(0, 0);
+    }, 600));
+  };
+
+  const charDelay = (ch) => {
+    const base = 22 + (Math.random() * 24 - 12); // 22 ± 12ms
+    if (ch === ' ') return 10;
+    if (ch === ',') return base + 120;
+    if (ch === '.' || ch === '?' || ch === '!') return base + 250;
+    return Math.max(8, base);
+  };
+
+  const typeNextSegment = (segIdx, charIdx) => {
+    if (done) return;
+    if (segIdx >= segments.length) {
+      // Finished — pause briefly with the cursor blinking, then fade it.
+      timers.push(setTimeout(() => {
+        if (done) return;
+        cursorEl.classList.add('ai-analysis__cursor--gone');
+        done = true;
+        __analysisDone.add(key);
+      }, 800));
+      return;
+    }
+    const seg = segments[segIdx];
+    // Lazily create a span for this segment on first char.
+    if (charIdx === 0) {
+      const span = document.createElement('span');
+      if (seg.bold) span.className = 'ai-analysis__bold';
+      textEl.appendChild(span);
+    }
+    if (charIdx >= seg.text.length) {
+      typeNextSegment(segIdx + 1, 0);
+      return;
+    }
+    const ch = seg.text.charAt(charIdx);
+    const targetSpan = textEl.lastChild;
+    targetSpan.appendChild(document.createTextNode(ch));
+    timers.push(setTimeout(() => typeNextSegment(segIdx, charIdx + 1), charDelay(ch)));
+  };
+
+  // IntersectionObserver: only start once the block is meaningfully visible.
+  if ('IntersectionObserver' in window) {
+    observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting && e.intersectionRatio >= 0.3) {
+          observer.disconnect();
+          run();
+        }
+      });
+    }, { threshold: [0, 0.3, 1] });
+    observer.observe(node);
+    // Safety: if observer never fires (e.g. inside a transformed/hidden container),
+    // fall back to running after a short timeout.
+    timers.push(setTimeout(() => {
+      if (!started && !done) {
+        if (observer) observer.disconnect();
+        run();
+      }
+    }, 1200));
+  } else {
+    run();
+  }
 }
 
 /* ====== Single source of truth for report HTML ======
@@ -3650,6 +4122,8 @@ function renderReportHTML(p) {
   const flagCount = (p.alerts && p.alerts.length) || 0;
   const flagLabel = flagCount === 1 ? '1 flag' : flagCount + ' flags';
   const alertsHtml = renderAlertsHtml(p.alerts);
+  const breakdownHtml = buildBreakdown(p);
+  const ingredientsHtml = buildIngredients(p);
   const suggestions = suggestionsFor(p).slice(0, 3);
   const bubblesHtml = suggestions.map(q =>
     `<button class="ai-bubble" type="button" data-q="${escapeHtml(q)}">${escapeHtml(q)}<span class="ai-bubble-send"><svg width="10" height="10"><use href="#i-up"/></svg></span></button>`
@@ -3659,6 +4133,7 @@ function renderReportHTML(p) {
   const brandParts = (p.brand || '').split(' · ');
   const brandEyebrow = brandParts[0] || '';
   const details = brandParts.slice(1).join(' · ');
+  const photoPlaceholder = `<svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg>`;
   const photoImg = p.imgSrc
     ? `<img src="${escapeHtml(p.imgSrc)}" alt="${escapeHtml(p.name)}" onerror="this.remove()">`
     : '';
@@ -3678,21 +4153,25 @@ function renderReportHTML(p) {
     <!-- 1. Product hero masthead — photo on the left; title + verdict pill on the right -->
     <div class="product-hero ${scoreClass}">
       <div class="photo-col">
-        <div class="photo" data-tone="${p.tone}">${escapeHtml(p.monogram)}${photoImg}</div>
+        <div class="photo" data-tone="${p.tone}">${photoPlaceholder}${photoImg}</div>
       </div>
       <div class="col">
         <div class="name">${escapeHtml(p.name)}</div>${verdictMiniHtml}
       </div>
     </div>
 
-    <!-- 2. Alerts — personal stakes -->
+    <!-- 2. Alerts — personal stakes (hidden when no alerts) -->
+    ${alertsHtml ? `
     <div class="alerts-block">
       <div class="section-title">
-        <span class="name">For you</span>
-        <span class="lead">Personal alerts based on your profile.</span>
+        <span class="name">Personal alerts</span>
+        <span class="lead">Based on your profile.</span>
       </div>
       ${alertsHtml}
-    </div>
+    </div>` : ''}
+
+    <!-- 3. AI Analysis — narrative paragraph that types itself in -->
+    ${renderAnalysisBlock(p)}
 
     <!-- 4. Ask the AI — A1 Orb + Headline -->
     <div class="ai-pitch">
@@ -3714,30 +4193,32 @@ function renderReportHTML(p) {
       </div>
     </div>
 
-    <!-- 5. Breakdown -->
+    <!-- 5. Breakdown — hidden when no rows have data -->
+    ${breakdownHtml ? `
     <div class="section-title">
       <span class="name">Breakdown</span>
       <span class="lead">Sugar, processing, additives, and other risk factors.</span>
     </div>
     <div class="card">
-      ${buildBreakdown(p)}
-    </div>
+      ${breakdownHtml}
+    </div>` : ''}
 
-    <!-- 6. Ingredients -->
+    <!-- 6. Ingredients — hidden when ingredients_text_en is missing -->
+    ${ingredientsHtml ? `
     <div class="section-title">
       <span class="name">Ingredients</span>
       <span class="lead">Coloured by potential risk for you.</span>
     </div>
     <div class="card">
       <div class="ing-list">
-        ${buildIngredients(p)}
+        ${ingredientsHtml}
       </div>
-      <div class="legend">
-        <span><i class="dot" style="background:var(--alert-critical)"></i>From your alerts</span>
-        <span><i class="dot" style="background:var(--alert-warning)"></i>General risk</span>
-        <span><i class="dot" style="background:var(--t-tertiary)"></i>Neutral</span>
+      <div class="ing-legend">
+        <span><i class="swatch alert"></i>From your alerts</span>
+        <span><i class="swatch warn"></i>General risk</span>
+        <span><i class="swatch ok"></i>Neutral</span>
       </div>
-    </div>
+    </div>` : ''}
 
     <!-- 7. Better alternatives -->
     <div class="section-title">
@@ -3746,22 +4227,22 @@ function renderReportHTML(p) {
     </div>
     <div class="alt-scroll">
       <div class="alt-card">
-        <div class="photo" data-tone="green">H<div class="ns-mini ns-a">A</div></div>
+        <div class="photo" data-tone="green"><svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg><div class="ns-mini ns-a">A</div></div>
         <div class="name">Whole Earth Hazelnut Butter</div>
         <div class="row"><span class="brand">Whole Earth</span></div>
       </div>
       <div class="alt-card">
-        <div class="photo" data-tone="cream">T<div class="ns-mini ns-a">A</div></div>
+        <div class="photo" data-tone="cream"><svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg><div class="ns-mini ns-a">A</div></div>
         <div class="name">Tahini-Cocoa Spread</div>
         <div class="row"><span class="brand">Earthy</span></div>
       </div>
       <div class="alt-card">
-        <div class="photo" data-tone="amber">P<div class="ns-mini ns-b">B</div></div>
+        <div class="photo" data-tone="amber"><svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg><div class="ns-mini ns-b">B</div></div>
         <div class="name">Pip &amp; Nut Cocoa</div>
         <div class="row"><span class="brand">Pip&amp;Nut</span></div>
       </div>
       <div class="alt-card">
-        <div class="photo" data-tone="rose">N<div class="ns-mini ns-c">C</div></div>
+        <div class="photo" data-tone="rose"><svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg><div class="ns-mini ns-c">C</div></div>
         <div class="name">Nocciolata Bio</div>
         <div class="row"><span class="brand">Rigoni</span></div>
       </div>
@@ -3776,6 +4257,7 @@ function wireReport(container) {
   container.querySelectorAll('.ai-bubbles .ai-bubble').forEach(btn => {
     btn.addEventListener('click', () => goTo('chat', 'a', btn.dataset.q));
   });
+  startAnalysisTypewriter(container);
 }
 
 /* v2 cam-sheet: renders the same report as the full Report screen */
@@ -3946,7 +4428,7 @@ function syncReport(p) {
 
 function syncPinned(p) {
   const photo = document.getElementById('pin-photo');
-  photo.textContent = p.monogram;
+  photo.innerHTML = '<svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg>';
   photo.dataset.tone = p.tone;
   document.getElementById('pin-name').textContent = p.name;
   document.getElementById('pin-brand').textContent = p.brand;
@@ -4078,7 +4560,7 @@ function loadPastChat(id) {
     const pin = document.getElementById('pinned-card');
     pin.classList.remove('hidden');
     document.getElementById('pin-photo').setAttribute('data-tone', chat.photoTone);
-    document.getElementById('pin-photo').textContent = chat.photoLetter;
+    document.getElementById('pin-photo').innerHTML = '<svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg>';
     document.getElementById('pin-name').textContent = chat.productName;
     document.getElementById('pin-brand').textContent = chat.productSub;
     const ns = document.getElementById('pin-ns');
@@ -4204,7 +4686,7 @@ function aiReply(q) {
   const cardEl = (monogram, tone, name, brand, ns) => {
     const c = document.createElement('div');
     c.className = 'bubble-card';
-    c.innerHTML = `<div class="photo" data-tone="${tone}">${monogram}</div><div class="info"><div class="name">${name}</div><div class="brand">${brand}</div></div><div class="ns-mini ns-${ns.toLowerCase()}">${ns}</div>`;
+    c.innerHTML = `<div class="photo" data-tone="${tone}"><svg class="photo-ph" aria-hidden="true"><use href="#i-product-ph"/></svg></div><div class="info"><div class="name">${name}</div><div class="brand">${brand}</div></div><div class="ns-mini ns-${ns.toLowerCase()}">${ns}</div>`;
     c.addEventListener('click', () => goTo('report'));
     return c;
   };
@@ -4253,7 +4735,7 @@ document.getElementById('chat-input').addEventListener('keydown', (e) => {
 });
 
 /* ====== Profile chips ======
-   V1: chips are directly toggleable (legacy behaviour).
+   V1: chips are directly toggleable inline.
    V2: chips render as read-only summaries; the picker lives in #screen-profile-edit. */
 document.querySelectorAll('.chip-grid').forEach(grid => {
   grid.querySelectorAll('.pchip[data-on]').forEach(c => c.classList.add('active'));
@@ -4268,7 +4750,7 @@ document.querySelectorAll('.chip-grid').forEach(grid => {
   updateCount(grid.dataset.section);
 });
 
-/* ====== Profile — edit sheet (v2) ====== */
+/* ====== Profile — edit sheet (v2). Single flat list — no Selected/All split. ====== */
 const PE_TITLES = {
   allergies: 'Allergies',
   situation: 'Situation',
@@ -4299,56 +4781,65 @@ function renderProfileEditList(section) {
   if (!grid) return;
 
   const chips = Array.from(grid.querySelectorAll('.pchip'));
-  const selected   = chips.filter(c => c.classList.contains('active'));
-  const unselected = chips.filter(c => !c.classList.contains('active'))
-                          .sort((a, b) => a.textContent.localeCompare(b.textContent));
-
-  if (selected.length) {
-    body.appendChild(makePeHeader(`Selected · ${selected.length}`));
-    selected.forEach(chip => body.appendChild(makePeRow(chip, section, true)));
-  }
-  if (unselected.length) {
-    body.appendChild(makePeHeader(selected.length ? 'All options' : 'Available'));
-    unselected.forEach(chip => body.appendChild(makePeRow(chip, section, false)));
-  }
   if (!chips.length) {
     const empty = document.createElement('div');
     empty.className = 'pe-empty';
     empty.textContent = 'Nothing to choose from yet.';
     body.appendChild(empty);
+    return;
   }
+  chips.forEach(chip => body.appendChild(makePeRow(chip, section)));
 }
 
-function makePeHeader(text) {
-  const h = document.createElement('div');
-  h.className = 'pe-section-header';
-  h.textContent = text;
-  return h;
+/* ====== Region picker sheet ====== */
+const REGIONS = [
+  'United States',
+  'United Kingdom',
+  'European Union',
+  'Canada',
+  'Australia',
+  'Japan',
+  'Germany',
+  'France',
+  'Brazil',
+  'Mexico',
+  'India',
+  'Singapore',
+];
+
+function openRegionPicker() {
+  const body = document.getElementById('region-body');
+  const current = document.getElementById('region-label').textContent.trim();
+  body.innerHTML = '';
+  REGIONS.forEach(name => {
+    const row = document.createElement('div');
+    const isSel = name === current;
+    row.className = 'pe-row' + (isSel ? ' selected' : '');
+    row.innerHTML = `
+      <span class="pe-label">${name}</span>
+      <span class="pe-check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12 L10 17 L19 7" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    `;
+    row.addEventListener('click', () => {
+      document.getElementById('region-label').textContent = name;
+      goTo('profile');
+    });
+    body.appendChild(row);
+  });
+  goTo('region');
 }
 
-function makePeRow(chip, section, isSelected) {
+function makePeRow(chip, section) {
   const row = document.createElement('div');
+  const isSelected = chip.classList.contains('active');
   row.className = 'pe-row' + (isSelected ? ' selected' : '');
-  const label = chip.textContent;
-  // Preserve severity tags (crit/warn) so users see why an item matters
-  const severity = chip.classList.contains('crit') ? 'crit'
-                 : chip.classList.contains('warn') ? 'warn' : '';
-  const tagText  = severity === 'crit' ? 'Critical'
-                 : severity === 'warn' ? 'Caution'  : '';
   row.innerHTML = `
-    <span class="pe-label">${label}${tagText ? `<span class="pe-tag ${severity}">${tagText}</span>` : ''}</span>
+    <span class="pe-label">${chip.textContent}</span>
     <span class="pe-check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12 L10 17 L19 7" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
   `;
   row.addEventListener('click', () => {
     chip.classList.toggle('active');
     row.classList.toggle('selected');
     updateCount(section);
-    // Keep the header count fresh without resorting (avoids items jumping under finger)
-    const header = document.querySelector('#pe-body .pe-section-header');
-    if (header && header.textContent.startsWith('Selected')) {
-      const n = document.querySelectorAll('#pe-body .pe-row.selected').length;
-      header.textContent = `Selected · ${n}`;
-    }
   });
   return row;
 }
@@ -4405,6 +4896,16 @@ document.getElementById('demo-fill-profile').addEventListener('click', () => {
   document.querySelectorAll('.pchip[data-on]').forEach(c => c.classList.add('active'));
   ['allergies','situation','diet','goals'].forEach(updateCount);
 });
+document.getElementById('demo-plan-premium').addEventListener('click', () => {
+  setActiveDemo('demo-plan-premium');
+  setPlan('premium');
+  goTo('profile');
+});
+document.getElementById('demo-plan-free').addEventListener('click', () => {
+  setActiveDemo('demo-plan-free');
+  setPlan('free');
+  goTo('profile');
+});
 
 /* ====== V2 Screens panel — screen tree wiring ====== */
 function setActiveStateV2(stateKey) {
@@ -4427,6 +4928,8 @@ const V2_STATE_MAP = {
   'na':             () => document.getElementById('demo-na').click(),
   'empty-profile':  () => document.getElementById('demo-empty-profile').click(),
   'fill-profile':   () => document.getElementById('demo-fill-profile').click(),
+  'plan-premium':   () => document.getElementById('demo-plan-premium').click(),
+  'plan-free':      () => document.getElementById('demo-plan-free').click(),
   'chat-a':         () => goTo('chat', 'a'),
   'chat-b':         () => goTo('chat', 'b'),
 };
@@ -4525,6 +5028,764 @@ syncReport(state.product);
 syncPinned(state.product);
 renderWelcome();
 setVersion('1');
+</script>
+
+<!-- ============================================================
+     REVIEW COMMENT SYSTEM
+     Click "Comment mode" in the top-right toolbar, then click any
+     element on the prototype to leave a note. Hit "Export" to
+     download this file with all comments embedded — share that
+     file with Claude to apply changes.
+     ============================================================ -->
+
+<script type="application/json" id="review-comments-data">[]</script>
+
+<style>
+  #cmnt-root, #cmnt-root * { box-sizing: border-box; font-family: 'Geist', -apple-system, sans-serif; }
+
+  /* ---- Top toolbar ---- */
+  #cmnt-toolbar {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 99990;
+    display: flex; align-items: center; gap: 8px;
+    background: #0A0A0A; color: #fff;
+    padding: 6px; border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.25), 0 0 0 1px rgba(255,255,255,.06);
+    font-size: 13px;
+  }
+  #cmnt-toolbar button {
+    appearance: none; border: 0; background: transparent; color: inherit;
+    padding: 8px 12px; border-radius: 10px; cursor: pointer;
+    font: inherit; font-weight: 600; letter-spacing: -.01em;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background .12s ease;
+  }
+  #cmnt-toolbar button:hover { background: rgba(255,255,255,.08); }
+  #cmnt-toolbar button.primary { background: #fff; color: #0A0A0A; }
+  #cmnt-toolbar button.primary:hover { background: #F4F4F0; }
+  #cmnt-toolbar button.active { background: #E63E11; color: #fff; }
+  #cmnt-toolbar .divider { width: 1px; height: 18px; background: rgba(255,255,255,.12); }
+  #cmnt-toolbar .count {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 11px; color: #A3A3A3;
+    padding: 0 6px; min-width: 24px; text-align: center;
+  }
+  #cmnt-toolbar input.author {
+    appearance: none; border: 0; background: rgba(255,255,255,.08); color: #fff;
+    padding: 7px 10px; border-radius: 8px; font: inherit; font-size: 12px;
+    width: 110px; outline: none;
+  }
+  #cmnt-toolbar input.author::placeholder { color: rgba(255,255,255,.4); }
+
+  /* ---- Comment-mode body cursor + highlight ---- */
+  body.cmnt-mode-on { cursor: crosshair; }
+  body.cmnt-mode-on .cmnt-hover-target {
+    outline: 2px solid #E63E11 !important;
+    outline-offset: 2px;
+    cursor: crosshair !important;
+  }
+
+  /* ---- Pins layer ---- */
+  #cmnt-pins {
+    position: fixed; inset: 0; pointer-events: none; z-index: 99980;
+    display: none;
+  }
+  body.cmnt-mode-on #cmnt-pins { display: block; }
+  .cmnt-pin {
+    position: fixed; pointer-events: auto; cursor: pointer;
+    width: 26px; height: 26px; border-radius: 50% 50% 50% 4px;
+    background: #E63E11; color: #fff;
+    font-weight: 700; font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 18px rgba(230,62,17,.45), 0 0 0 2px #fff;
+    transform: translate(-4px, -22px);
+    transition: transform .12s ease, background .12s ease;
+  }
+  .cmnt-pin:hover { transform: translate(-4px, -22px) scale(1.12); }
+  .cmnt-pin.resolved { background: #A3A3A3; box-shadow: 0 4px 12px rgba(0,0,0,.15), 0 0 0 2px #fff; }
+  .cmnt-pin.active { background: #0A0A0A; }
+  .cmnt-pin.missing { display: none; }
+
+  /* ---- Editor popover ---- */
+  #cmnt-editor {
+    position: fixed; z-index: 99995; display: none;
+    width: 320px; background: #fff; color: #0A0A0A;
+    border-radius: 14px; padding: 14px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.22), 0 0 0 1px rgba(10,10,10,.06);
+  }
+  #cmnt-editor.open { display: block; }
+  #cmnt-editor .ed-snippet {
+    font-size: 11px; color: #525252; margin-bottom: 8px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    background: #F4F4F0; padding: 6px 8px; border-radius: 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #cmnt-editor textarea {
+    width: 100%; min-height: 90px; resize: vertical;
+    border: 1px solid #EAEAEA; border-radius: 8px;
+    padding: 8px 10px; font: inherit; font-size: 13px; outline: none;
+    color: #0A0A0A;
+  }
+  #cmnt-editor textarea:focus { border-color: #0A0A0A; }
+  #cmnt-editor .ed-actions {
+    display: flex; justify-content: space-between; gap: 8px; margin-top: 10px;
+  }
+  #cmnt-editor .ed-actions .left { display: flex; gap: 6px; }
+  #cmnt-editor button {
+    appearance: none; border: 0; background: transparent;
+    padding: 7px 12px; border-radius: 8px; cursor: pointer;
+    font: inherit; font-size: 12px; font-weight: 600;
+  }
+  #cmnt-editor button.save { background: #0A0A0A; color: #fff; }
+  #cmnt-editor button.save:hover { background: #262626; }
+  #cmnt-editor button.cancel { color: #525252; }
+  #cmnt-editor button.cancel:hover { background: #F4F4F0; }
+  #cmnt-editor button.delete { color: #E63E11; }
+  #cmnt-editor button.delete:hover { background: #FFF1ED; }
+  #cmnt-editor button.resolve { color: #038141; }
+  #cmnt-editor button.resolve:hover { background: #E8F4EC; }
+
+  /* ---- Sidebar ---- */
+  #cmnt-sidebar {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 340px;
+    z-index: 99985;
+    background: #fff; color: #0A0A0A;
+    border-left: 1px solid #EAEAEA;
+    box-shadow: -16px 0 40px rgba(0,0,0,.06);
+    transform: translateX(100%); transition: transform .22s ease;
+    display: flex; flex-direction: column;
+  }
+  #cmnt-sidebar.open { transform: translateX(0); }
+  #cmnt-sidebar .sb-head {
+    padding: 16px 16px 12px; border-bottom: 1px solid #EAEAEA;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  #cmnt-sidebar .sb-head h3 {
+    margin: 0; font-size: 14px; font-weight: 700; letter-spacing: -.01em;
+  }
+  #cmnt-sidebar .sb-head .sb-close {
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    width: 28px; height: 28px; border-radius: 8px; color: #525252;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  #cmnt-sidebar .sb-head .sb-close:hover { background: #F4F4F0; }
+  #cmnt-sidebar .sb-list {
+    flex: 1; overflow-y: auto; padding: 8px;
+  }
+  #cmnt-sidebar .sb-empty {
+    padding: 32px 16px; text-align: center; color: #A3A3A3; font-size: 13px;
+  }
+  #cmnt-sidebar .sb-item {
+    display: grid; grid-template-columns: 28px 1fr; gap: 10px;
+    padding: 10px; border-radius: 10px; cursor: pointer;
+    transition: background .12s ease;
+  }
+  #cmnt-sidebar .sb-item:hover { background: #F4F4F0; }
+  #cmnt-sidebar .sb-item.resolved { opacity: .55; }
+  #cmnt-sidebar .sb-item .num {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: #E63E11; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  #cmnt-sidebar .sb-item.resolved .num { background: #A3A3A3; }
+  #cmnt-sidebar .sb-item .body { min-width: 0; }
+  #cmnt-sidebar .sb-item .meta {
+    font-size: 10px; font-family: 'Geist Mono', ui-monospace, monospace;
+    color: #A3A3A3; text-transform: uppercase; letter-spacing: .04em;
+    margin-bottom: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #cmnt-sidebar .sb-item .text {
+    font-size: 13px; line-height: 1.4; color: #0A0A0A;
+    white-space: pre-wrap; word-wrap: break-word;
+  }
+  #cmnt-sidebar .sb-item .author {
+    font-size: 11px; color: #525252; margin-top: 4px;
+  }
+  #cmnt-sidebar .sb-foot {
+    padding: 12px 16px; border-top: 1px solid #EAEAEA;
+    display: flex; gap: 8px;
+  }
+  #cmnt-sidebar .sb-foot button {
+    appearance: none; border: 1px solid #EAEAEA; background: #fff; color: #0A0A0A;
+    padding: 8px 12px; border-radius: 8px; cursor: pointer; font: inherit;
+    font-size: 12px; font-weight: 600; flex: 1;
+  }
+  #cmnt-sidebar .sb-foot button:hover { background: #F4F4F0; }
+  #cmnt-sidebar .sb-foot button.danger { color: #E63E11; border-color: #FFD9CC; }
+  #cmnt-sidebar .sb-foot button.danger:hover { background: #FFF1ED; }
+
+  /* ---- Status toast ---- */
+  #cmnt-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #0A0A0A; color: #fff; padding: 10px 18px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; z-index: 99999;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+  }
+  #cmnt-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+
+<div id="cmnt-toolbar">
+  <input type="text" class="author" id="cmnt-author" placeholder="Your name" autocomplete="off">
+  <span class="divider"></span>
+  <button id="cmnt-mode-btn" type="button" title="Toggle comment mode (C)">
+    <span>💬</span><span>Comment mode</span>
+  </button>
+  <button id="cmnt-list-btn" type="button" title="Toggle comments list">
+    <span>📋</span><span>List</span><span class="count" id="cmnt-count">0</span>
+  </button>
+  <span class="divider"></span>
+  <button id="cmnt-export-btn" class="primary" type="button" title="Download this file with comments embedded">
+    <span>⬇</span><span>Export</span>
+  </button>
+</div>
+
+<aside id="cmnt-sidebar">
+  <div class="sb-head">
+    <h3>Comments</h3>
+    <button class="sb-close" id="cmnt-sidebar-close" type="button" aria-label="Close">×</button>
+  </div>
+  <div class="sb-list" id="cmnt-sidebar-list"></div>
+  <div class="sb-foot">
+    <button id="cmnt-export-btn-2" type="button">Export file</button>
+    <button id="cmnt-clear-btn" class="danger" type="button">Clear all</button>
+  </div>
+</aside>
+
+<div id="cmnt-pins"></div>
+
+<div id="cmnt-editor">
+  <div class="ed-snippet" id="cmnt-editor-snippet"></div>
+  <textarea id="cmnt-editor-text" placeholder="What should change here?"></textarea>
+  <div class="ed-actions">
+    <div class="left">
+      <button class="delete" id="cmnt-editor-delete" type="button" style="display:none">Delete</button>
+      <button class="resolve" id="cmnt-editor-resolve" type="button" style="display:none">Resolve</button>
+    </div>
+    <div>
+      <button class="cancel" id="cmnt-editor-cancel" type="button">Cancel</button>
+      <button class="save" id="cmnt-editor-save" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="cmnt-toast"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const STORAGE_KEY = 'prototype-review-comments-v1';
+  const AUTHOR_KEY  = 'prototype-review-author';
+
+  /** @type {Array<{id:string, selector:string, snippet:string, x:number, y:number, text:string, author:string, timestamp:string, status:'open'|'resolved'}>} */
+  let comments = [];
+  let modeOn = false;
+  let editingId = null;          // comment id when editing existing
+  let pendingNew = null;         // {selector, snippet, x, y} when creating new
+
+  // ---------- Load ----------
+  function loadComments() {
+    // Prefer embedded data (set when file was exported); fall back to localStorage.
+    try {
+      const dataEl = document.getElementById('review-comments-data');
+      const raw = (dataEl?.textContent || '').trim();
+      if (raw && raw !== '[]') {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) {
+          comments = parsed;
+          // Sync to localStorage so further edits persist locally too.
+          saveLocal();
+          return;
+        }
+      }
+    } catch (_) {}
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) comments = JSON.parse(raw) || [];
+    } catch (_) { comments = []; }
+  }
+  function saveLocal() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(comments)); } catch (_) {}
+  }
+
+  // ---------- Screen scoping ----------
+  // Each comment is bound to the .screen[id="screen-..."] ancestor of its target,
+  // so switching screens filters pins and the sidebar to the active screen only.
+  function getScreenIdOf(el) {
+    if (!el || !el.closest) return null;
+    const s = el.closest('.screen[id]');
+    return s ? s.id : null;
+  }
+  function getCurrentScreenId() {
+    const active = document.querySelector('.screen.active[id]');
+    if (active) return active.id;
+    const ds = document.body.getAttribute('data-screen');
+    return ds ? ('screen-' + ds) : null;
+  }
+  function isOnCurrentScreen(c) {
+    // Primary check: resolve the element and verify it lives inside the
+    // currently-active .screen ancestor. This is robust against stale or
+    // missing screenId (e.g. legacy comments from localStorage), and against
+    // selectors whose stored screenId disagrees with the live DOM.
+    const el = findEl(c.selector);
+    if (el) {
+      const screen = el.closest('.screen[id]');
+      if (!screen) return true; // element is outside any screen (global chrome)
+      return screen.classList.contains('active');
+    }
+    // Fallback: element no longer in DOM. Use stored screenId.
+    if (c.screenId === null || c.screenId === undefined) return false;
+    return c.screenId === getCurrentScreenId();
+  }
+
+  // ---------- Selectors ----------
+  function buildSelector(el) {
+    if (!el || el.nodeType !== 1) return '';
+    if (el.id) return '#' + CSS.escape(el.id);
+    const parts = [];
+    let cur = el;
+    while (cur && cur !== document.body && cur.nodeType === 1) {
+      if (cur.id) { parts.unshift('#' + CSS.escape(cur.id)); break; }
+      const parent = cur.parentNode;
+      if (!parent) break;
+      const same = Array.from(parent.children).filter(c => c.tagName === cur.tagName);
+      const idx = same.indexOf(cur) + 1;
+      parts.unshift(`${cur.tagName.toLowerCase()}:nth-of-type(${idx})`);
+      cur = parent;
+    }
+    if (!parts[0]?.startsWith('#')) parts.unshift('body');
+    return parts.join(' > ');
+  }
+  function findEl(selector) {
+    if (!selector) return null;
+    try { return document.querySelector(selector); } catch (_) { return null; }
+  }
+  function snippetOf(el) {
+    if (!el) return '';
+    const txt = (el.textContent || '').trim().replace(/\s+/g, ' ');
+    if (txt) return txt.slice(0, 80);
+    const tag = el.tagName.toLowerCase();
+    const cls = (el.className && typeof el.className === 'string') ? '.' + el.className.trim().split(/\s+/).slice(0,2).join('.') : '';
+    return `<${tag}${cls}>`;
+  }
+
+  // ---------- Author ----------
+  const authorInput = document.getElementById('cmnt-author');
+  authorInput.value = (() => { try { return localStorage.getItem(AUTHOR_KEY) || ''; } catch (_) { return ''; } })();
+  authorInput.addEventListener('input', () => {
+    try { localStorage.setItem(AUTHOR_KEY, authorInput.value.trim()); } catch (_) {}
+  });
+
+  // ---------- Pins ----------
+  const pinsLayer = document.getElementById('cmnt-pins');
+  /** @type {Map<string, HTMLElement>} */
+  const pinNodes = new Map();
+
+  function renderPinsList() {
+    // Only render pins for comments on the current screen.
+    const visible = comments.filter(isOnCurrentScreen);
+    const ids = new Set(visible.map(c => c.id));
+    for (const [id, node] of pinNodes) {
+      if (!ids.has(id)) { node.remove(); pinNodes.delete(id); }
+    }
+    visible.forEach((c, i) => {
+      let node = pinNodes.get(c.id);
+      if (!node) {
+        node = document.createElement('div');
+        node.className = 'cmnt-pin';
+        node.dataset.id = c.id;
+        node.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openEditorForExisting(c.id, e.clientX, e.clientY);
+        });
+        pinsLayer.appendChild(node);
+        pinNodes.set(c.id, node);
+      }
+      // Number pins by their order within the *full* comments list so that
+      // sidebar numbers and pin numbers stay consistent.
+      const globalIdx = comments.indexOf(c);
+      node.textContent = String(globalIdx + 1);
+      node.classList.toggle('resolved', c.status === 'resolved');
+      node.classList.toggle('active', editingId === c.id);
+    });
+  }
+
+  function positionPins() {
+    for (const [id, node] of pinNodes) {
+      const c = comments.find(cc => cc.id === id);
+      if (!c) continue;
+      const el = findEl(c.selector);
+      if (!el) { node.classList.add('missing'); continue; }
+      node.classList.remove('missing');
+      const r = el.getBoundingClientRect();
+      const px = r.left + r.width  * (c.x ?? 0);
+      const py = r.top  + r.height * (c.y ?? 0);
+      node.style.left = `${px}px`;
+      node.style.top  = `${py}px`;
+    }
+  }
+  function tickPins() { positionPins(); requestAnimationFrame(tickPins); }
+  requestAnimationFrame(tickPins);
+
+  // ---------- Sidebar ----------
+  const sidebar     = document.getElementById('cmnt-sidebar');
+  const sidebarList = document.getElementById('cmnt-sidebar-list');
+  const countEl     = document.getElementById('cmnt-count');
+
+  function screenLabel(screenId) {
+    if (!screenId) return 'Global';
+    return screenId.replace(/^screen-/, '').replace(/-/g, ' ');
+  }
+
+  function renderSidebar() {
+    // Toolbar count = total comments across all screens.
+    countEl.textContent = String(comments.length);
+
+    const currentScreen = getCurrentScreenId();
+    const onScreen  = comments.filter(isOnCurrentScreen);
+    const offScreen = comments.length - onScreen.length;
+
+    if (!comments.length) {
+      sidebarList.innerHTML = `<div class="sb-empty">No comments yet.<br>Turn on Comment mode and click any element to add one.</div>`;
+      return;
+    }
+    if (!onScreen.length) {
+      sidebarList.innerHTML = `<div class="sb-empty">No comments on <b>${escapeHtml(screenLabel(currentScreen))}</b>.<br>${offScreen} comment${offScreen === 1 ? '' : 's'} on other screens.</div>`;
+      return;
+    }
+
+    sidebarList.innerHTML = '';
+    onScreen.forEach((c) => {
+      const globalIdx = comments.indexOf(c);
+      const item = document.createElement('div');
+      item.className = 'sb-item' + (c.status === 'resolved' ? ' resolved' : '');
+      item.innerHTML = `
+        <div class="num">${globalIdx + 1}</div>
+        <div class="body">
+          <div class="meta">${escapeHtml((c.snippet || '').slice(0, 60))}</div>
+          <div class="text">${escapeHtml(c.text || '')}</div>
+          ${c.author ? `<div class="author">— ${escapeHtml(c.author)}</div>` : ''}
+        </div>`;
+      item.addEventListener('click', () => {
+        const el = findEl(c.selector);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const r = (el || document.body).getBoundingClientRect();
+        const ax = r.left + r.width  * (c.x ?? 0.5);
+        const ay = r.top  + r.height * (c.y ?? 0.5);
+        openEditorForExisting(c.id, ax + 14, ay + 14);
+      });
+      sidebarList.appendChild(item);
+    });
+
+    if (offScreen) {
+      const note = document.createElement('div');
+      note.className = 'sb-empty';
+      note.style.padding = '12px 16px';
+      note.style.borderTop = '1px solid #EAEAEA';
+      note.style.marginTop = '8px';
+      note.style.textAlign = 'left';
+      note.innerHTML = `<b>${offScreen}</b> comment${offScreen === 1 ? '' : 's'} on other screens. Switch screens to view.`;
+      sidebarList.appendChild(note);
+    }
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]));
+  }
+
+  document.getElementById('cmnt-list-btn').addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+  });
+  document.getElementById('cmnt-sidebar-close').addEventListener('click', () => {
+    sidebar.classList.remove('open');
+  });
+
+  // ---------- Mode toggle ----------
+  const modeBtn = document.getElementById('cmnt-mode-btn');
+  function setMode(on) {
+    modeOn = on;
+    document.body.classList.toggle('cmnt-mode-on', on);
+    modeBtn.classList.toggle('active', on);
+  }
+  modeBtn.addEventListener('click', () => setMode(!modeOn));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (document.getElementById('cmnt-editor').classList.contains('open')) closeEditor();
+      else if (modeOn) setMode(false);
+    }
+    // Quick toggle with "C" when not typing
+    if ((e.key === 'c' || e.key === 'C') && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) {
+      setMode(!modeOn);
+    }
+  });
+
+  // ---------- Hover highlight ----------
+  let hoverEl = null;
+  document.addEventListener('mousemove', (e) => {
+    if (!modeOn) {
+      if (hoverEl) { hoverEl.classList.remove('cmnt-hover-target'); hoverEl = null; }
+      return;
+    }
+    const t = e.target;
+    if (t === hoverEl) return;
+    if (isCmntUi(t)) {
+      if (hoverEl) { hoverEl.classList.remove('cmnt-hover-target'); hoverEl = null; }
+      return;
+    }
+    if (hoverEl) hoverEl.classList.remove('cmnt-hover-target');
+    hoverEl = t;
+    hoverEl.classList.add('cmnt-hover-target');
+  }, true);
+
+  function isCmntUi(node) {
+    return !!(node.closest && (
+      node.closest('#cmnt-toolbar') ||
+      node.closest('#cmnt-sidebar') ||
+      node.closest('#cmnt-editor') ||
+      node.closest('#cmnt-pins') ||
+      node.closest('#cmnt-toast')
+    ));
+  }
+
+  // ---------- Click capture ----------
+  document.addEventListener('click', (e) => {
+    if (!modeOn) return;
+    if (isCmntUi(e.target)) return; // let UI handle its own clicks
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.target;
+    if (!target || target === document.body || target === document.documentElement) return;
+    const rect = target.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / Math.max(1, rect.width);
+    const y = (e.clientY - rect.top)  / Math.max(1, rect.height);
+    pendingNew = {
+      selector: buildSelector(target),
+      snippet:  snippetOf(target),
+      screenId: getScreenIdOf(target),
+      x, y,
+    };
+    openEditor(e.clientX, e.clientY, '', /*isNew*/ true);
+  }, true);
+
+  // ---------- Editor ----------
+  const editor       = document.getElementById('cmnt-editor');
+  const editorText   = document.getElementById('cmnt-editor-text');
+  const editorSnip   = document.getElementById('cmnt-editor-snippet');
+  const editorSave   = document.getElementById('cmnt-editor-save');
+  const editorCancel = document.getElementById('cmnt-editor-cancel');
+  const editorDel    = document.getElementById('cmnt-editor-delete');
+  const editorRes    = document.getElementById('cmnt-editor-resolve');
+
+  function openEditor(x, y, value, isNew) {
+    editorText.value = value || '';
+    const snippet = isNew ? pendingNew.snippet : (comments.find(c => c.id === editingId)?.snippet || '');
+    editorSnip.textContent = snippet;
+    editorDel.style.display = isNew ? 'none' : '';
+    editorRes.style.display = isNew ? 'none' : '';
+    editorRes.textContent = isNew ? 'Resolve' : (
+      comments.find(c => c.id === editingId)?.status === 'resolved' ? 'Reopen' : 'Resolve'
+    );
+    editor.classList.add('open');
+    // Position near click, clamp to viewport
+    const w = 320, h = 200;
+    const left = Math.min(window.innerWidth - w - 12, Math.max(12, x + 12));
+    const top  = Math.min(window.innerHeight - h - 12, Math.max(12, y + 12));
+    editor.style.left = left + 'px';
+    editor.style.top  = top  + 'px';
+    setTimeout(() => editorText.focus(), 0);
+  }
+  function openEditorForExisting(id, x, y) {
+    editingId = id;
+    pendingNew = null;
+    const c = comments.find(cc => cc.id === id);
+    if (!c) return;
+    openEditor(x, y, c.text, false);
+    renderPinsList();
+  }
+  function closeEditor() {
+    editor.classList.remove('open');
+    editingId = null;
+    pendingNew = null;
+    renderPinsList();
+  }
+
+  editorCancel.addEventListener('click', closeEditor);
+
+  editorSave.addEventListener('click', () => {
+    const text = editorText.value.trim();
+    if (!text) { closeEditor(); return; }
+    const author = authorInput.value.trim();
+    if (pendingNew) {
+      const c = {
+        id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        selector: pendingNew.selector,
+        snippet:  pendingNew.snippet,
+        screenId: pendingNew.screenId,
+        x: pendingNew.x, y: pendingNew.y,
+        text, author,
+        timestamp: new Date().toISOString(),
+        status: 'open',
+      };
+      comments.push(c);
+      toast('Comment added');
+    } else if (editingId) {
+      const c = comments.find(cc => cc.id === editingId);
+      if (c) { c.text = text; c.author = author || c.author; }
+      toast('Comment updated');
+    }
+    saveLocal();
+    closeEditor();
+    renderPinsList();
+    renderSidebar();
+  });
+
+  editorDel.addEventListener('click', () => {
+    if (!editingId) return;
+    comments = comments.filter(c => c.id !== editingId);
+    saveLocal();
+    closeEditor();
+    renderPinsList();
+    renderSidebar();
+    toast('Deleted');
+  });
+
+  editorRes.addEventListener('click', () => {
+    if (!editingId) return;
+    const c = comments.find(cc => cc.id === editingId);
+    if (!c) return;
+    c.status = c.status === 'resolved' ? 'open' : 'resolved';
+    saveLocal();
+    closeEditor();
+    renderPinsList();
+    renderSidebar();
+    toast(c.status === 'resolved' ? 'Resolved' : 'Reopened');
+  });
+
+  editorText.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); editorSave.click(); }
+  });
+
+  // ---------- Toast ----------
+  const toastEl = document.getElementById('cmnt-toast');
+  let toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
+  }
+
+  // ---------- Export ----------
+  function buildHumanSummary() {
+    if (!comments.length) return '';
+    const lines = [];
+    lines.push('=== REVIEW COMMENTS ===');
+    lines.push(`Total: ${comments.length} (${comments.filter(c => c.status === 'open').length} open, ${comments.filter(c => c.status === 'resolved').length} resolved)`);
+    lines.push('');
+    comments.forEach((c, i) => {
+      lines.push(`[${i + 1}] ${c.status.toUpperCase()}${c.author ? ' · ' + c.author : ''}${c.timestamp ? ' · ' + c.timestamp.slice(0, 10) : ''}`);
+      lines.push(`    Element: ${c.selector}`);
+      if (c.snippet) lines.push(`    Snippet: "${c.snippet}"`);
+      const wrapped = (c.text || '').split('\n').map(l => '    > ' + l).join('\n');
+      lines.push(wrapped);
+      lines.push('');
+    });
+    return lines.join('\n');
+  }
+
+  function doExport() {
+    // Snapshot: write data into the embedded script tag, then serialize the DOM.
+    const dataEl = document.getElementById('review-comments-data');
+    dataEl.textContent = JSON.stringify(comments, null, 2);
+
+    // Clone document to strip ephemeral UI state before download.
+    const clone = document.documentElement.cloneNode(true);
+    // Remove live pin DOM (regenerated on next load).
+    const pins = clone.querySelector('#cmnt-pins');
+    if (pins) pins.innerHTML = '';
+    // Reset sidebar/editor open state.
+    clone.querySelector('#cmnt-sidebar')?.classList.remove('open');
+    clone.querySelector('#cmnt-editor')?.classList.remove('open');
+    clone.querySelector('#cmnt-toast')?.classList.remove('show');
+    clone.querySelector('body')?.classList.remove('cmnt-mode-on');
+    // Update embedded data inside clone too.
+    const cloneData = clone.querySelector('#review-comments-data');
+    if (cloneData) cloneData.textContent = JSON.stringify(comments, null, 2);
+
+    // Inject a human-readable summary as an HTML comment right before </body>
+    // for easy scanning by Claude/humans without parsing JSON.
+    const summary = buildHumanSummary();
+    const bodyEl  = clone.querySelector('body');
+    if (bodyEl && summary) {
+      const commentNode = document.createComment('\n' + summary + '\n');
+      bodyEl.appendChild(commentNode);
+    }
+
+    const html = '<!DOCTYPE html>\n' + clone.outerHTML;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'prototype-review.html';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    toast('Exported');
+  }
+
+  document.getElementById('cmnt-export-btn').addEventListener('click', doExport);
+  document.getElementById('cmnt-export-btn-2').addEventListener('click', doExport);
+
+  document.getElementById('cmnt-clear-btn').addEventListener('click', () => {
+    if (!comments.length) return;
+    if (!confirm('Delete all comments? This cannot be undone.')) return;
+    comments = [];
+    saveLocal();
+    renderPinsList();
+    renderSidebar();
+    toast('All comments cleared');
+  });
+
+  // ---------- Screen change watcher ----------
+  // Re-render pins and sidebar whenever the active screen changes (handled by
+  // the prototype's own goTo() — it toggles .active on .screen sections and
+  // sets data-screen on body).
+  const onScreenChange = () => { renderPinsList(); renderSidebar(); };
+  const screenObserver = new MutationObserver(onScreenChange);
+  screenObserver.observe(document.body, { attributes: true, attributeFilter: ['data-screen'] });
+  document.querySelectorAll('.screen').forEach(s => {
+    screenObserver.observe(s, { attributes: true, attributeFilter: ['class'] });
+  });
+
+  // ---------- Boot ----------
+  loadComments();
+
+  // Backfill screenId from the live DOM. Runs for legacy comments saved
+  // before screen-scoping shipped (screenId === undefined) AND for comments
+  // whose stored screenId disagrees with what their selector currently
+  // resolves to in the DOM (e.g. backfilled wrongly in an earlier session).
+  let backfilled = false;
+  comments.forEach(c => {
+    const el = findEl(c.selector);
+    const trueScreenId = el ? getScreenIdOf(el) : null;
+    if (el && c.screenId !== trueScreenId) {
+      c.screenId = trueScreenId;
+      backfilled = true;
+    } else if (c.screenId === undefined) {
+      c.screenId = null;
+      backfilled = true;
+    }
+  });
+  if (backfilled) saveLocal();
+
+  renderPinsList();
+  renderSidebar();
+
+  // If we loaded comments from embedded data, open the sidebar so the reviewer sees them.
+  if (comments.length) sidebar.classList.add('open');
+})();
 </script>
 
 </body>
