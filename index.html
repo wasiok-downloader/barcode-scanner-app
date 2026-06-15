@@ -2539,7 +2539,7 @@
   }
 </style>
 </head>
-<body>
+<body data-version="2">
 
 <!-- ============ ICON DEFS ============ -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -2681,8 +2681,8 @@
     <h1>AI Barcode Scanner</h1>
     <p id="stage-subtitle">4 screens · Camera · Full Report · Profile · AI Chat</p>
     <div class="version-toggle" id="version-toggle" role="tablist" aria-label="Prototype version">
-      <button data-ver="1" class="active" role="tab">v1</button>
-      <button data-ver="2" role="tab">v2</button>
+      <button data-ver="1" role="tab">v1</button>
+      <button data-ver="2" class="active" role="tab">v2</button>
     </div>
   </div>
 
@@ -5027,7 +5027,7 @@ function showToast(msg) {
 syncReport(state.product);
 syncPinned(state.product);
 renderWelcome();
-setVersion('1');
+setVersion('2');
 </script>
 
 <!-- ============================================================
